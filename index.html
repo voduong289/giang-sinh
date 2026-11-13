@@ -1,6 +1,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Cây Thông Chữ Số</title>
+<title>Giáng Sinh An Lành</title>
+<meta name="description" content="Cây thông và hoa hồng mọc lên từ chữ số trên nền tuyết, pháo hoa, ông già Noel và một món quà nhỏ dành cho bạn.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://voduong289.github.io/giang-sinh/">
+<meta property="og:title" content="Giáng Sinh An Lành 🎄">
+<meta property="og:description" content="Cây thông và hoa hồng mọc lên từ chữ số trên nền tuyết, pháo hoa, ông già Noel và một món quà nhỏ dành cho bạn. Bấm để mở!">
+<meta property="og:image" content="https://voduong289.github.io/giang-sinh/preview.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://voduong289.github.io/giang-sinh/preview.jpg">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎄%3C/text%3E%3C/svg%3E">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap">
 <style>
@@ -34,7 +46,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 </style>
 
 <canvas id="c" aria-label="Cây thông Noel và hoa hồng dựng từ chữ số, pháo hoa trên bầu trời đêm"></canvas>
-<div class="hud" id="hint">bấm trời: pháo hoa · chạm cây thông, hộp quà, sao băng, ông già Noel · phím R: dựng lại</div>
+<div class="hud" id="hint">bấm trời: pháo hoa · chạm cây, hộp quà, sao băng, ông già Noel · rê chuột: gió · R: dựng lại</div>
 <div class="hud" id="timer">t 00.00s</div>
 <div class="hud" id="info">
   <div style="color:var(--fg)">@noel.ascii</div>
@@ -55,7 +67,7 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const easeOut=p=>1-Math.pow(1-p,3);
 const FONT='"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,"DejaVu Sans Mono",monospace';
 // trình tự xuất hiện (giây): trời đen → sao, trăng, mây → tuyết dâng → thân cây → lá → đèn → ngôi sao → hoa hồng → lời chúc, pháo hoa → ông già Noel
-const T={stars:.8,moon:1.2,clouds:.6,snow:1.5,trunk:4,leaf:5,lights:8.8,star:10.4,rose:11.6,gift:14.4,greet:15.2,fw:16,santa:18};
+const T={stars:.8,moon:1.2,clouds:.6,snow:1.5,trunk:4,leaf:5,lights:8.8,star:10.4,rose:11.6,gift:14.4,greet:15.2,fw:16,santa:18,walkIn:21};
 // lời nhắn trên tờ giấy (sửa nội dung ở đây)
 const MSG={
   gift:{title:'Món quà nhỏ cho bạn',body:'Chúc bạn một mùa Giáng Sinh thật ấm áp, luôn có những người thương yêu ở bên, và một năm mới gặp thật nhiều may mắn, bình an và hạnh phúc.'},
@@ -77,7 +89,8 @@ glow.blue=makeGlow('rgba(90,160,255,1)');glow.pink=makeGlow('rgba(255,120,200,1)
 glow.white=makeGlow('rgba(255,255,255,1)');glow.green=makeGlow('rgba(120,255,160,1)');
 glow.moon=makeGlow('rgba(255,236,190,1)');
 let clouds=[];
-let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0,xmasNow=false;
+let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0;
+let wind=0,lastPtr=null,lastShake=-9,motionAsked=false,modeNow=null;
 // mây dựng từ chữ số: hợp của vài khối tròn, lõi là số, mép là dấu chấm
 function makeCloud(w,h){
   const blobs=[],n=Math.round(rnd(5,7));
@@ -257,9 +270,11 @@ function buildScene(){
   }
   // hộp quà bằng chữ số, bên phải gốc cây
   {
-    const gw=Math.max(cw*13,g.TH*0.19),gh=Math.max(ch*4.2,gw*0.6);
-    const x0=g.cx+tw*2.2,x1=x0+gw,y1=groundTop(g.cx)+ch*1.1,y0=y1-gh,mx=(x0+x1)/2,my=(y0+y1)/2;
-    g.gift={x0:x0-cw,x1:x1+cw,y0:y0-ch*2.4,top:y0,y1,mx,open:0};
+    const gw=Math.max(cw*9,g.TH*0.12),gh=Math.max(ch*3,gw*0.6);
+    // đặt ngay ngoài mép tán cây bên phải; người tuyết sẽ đứng đối xứng bên trái
+    const gxC=Math.min(g.cx+g.HW*1.12+gw*.35,W-gw*.6-cw);
+    const x0=gxC-gw/2,x1=x0+gw,y1=groundTop(gxC)+ch*1.1,y0=y1-gh,mx=(x0+x1)/2,my=(y0+y1)/2;
+    g.gift={x0:x0-cw,x1:x1+cw,y0:y0-ch*2.4,top:y0,y1,mx,open:0,bx0:x0,w:gw};
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
       const x=(c+.5)*cw,y=(r+.5)*ch,rib=Math.abs(x-mx)<cw*.9;
       let o=null;
@@ -273,6 +288,39 @@ function buildScene(){
         if(ax<cw*.6||(ax>cw&&ax<cw*2.8))o={type:'bow',ch:ax<cw*.6?'@':pick('oO0'),h:46,s:100,l:64,lid:1,tw:rnd(0,7)};
       }
       if(o){o.delay=T.gift+clamp((y1-y)/(gh+ch*2.3),0,1)+rnd(0,.1);put(c,r,o)}
+    }
+  }
+  // người tuyết bên trái gốc cây, đối xứng với hộp quà; một người nhỏ đi tới đắp nó
+  {
+    const sxm=g.cx-(g.gift.bx0-g.cx)-g.gift.w/2,gb=groundTop(sxm)+ch*.7;
+    const r1=ch*1.95,r2=ch*1.4,r3=ch*1.02;
+    const c1=gb-r1,c2=c1-(r1+r2)*.78,c3=c2-(r2+r3)*.82;
+    const sp=clamp(W/12,45,110),start=-cw*3,stand=Math.max(cw*2,sxm-r1-cw*3.5);
+    const t0=T.walkIn,t1=t0+(stand-start)/sp,tb0=t1+.4,tb1=tb0+3.4,t2=tb1+1.6;
+    g.snowman={x:sxm,x0:sxm-r1-cw*4,x1:sxm+r1+cw*4,bottom:gb};
+    g.walker={start,stand,sp,t0,t1,tb0,tb1,t2,t3:t2+(stand-start)/sp+.5};
+    const topY=c3-r3-ch*1.8;
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const x=(c+.5)*cw,y=(r+.5)*ch,dx=x-sxm;let o=null;
+      const inB=(cy,rr)=>Math.hypot(dx,(y-cy)*1.05)<=rr;
+      if(y>c3-r3-ch*1.7&&y<c3-r3*.75&&Math.abs(dx)<r3*.75)o={ch:pick(DIG),h:354,s:70,l:42};          // mũ len đỏ
+      else if(Math.abs(y-(c3-r3*.75))<ch*.5&&Math.abs(dx)<r3*1.25)o={ch:pick('8098'),h:46,s:90,l:62}; // vành mũ vàng
+      else if(inB(c3,r3)){
+        if(Math.abs(y-(c3-r3*.15))<ch*.5&&Math.abs(Math.abs(dx)-r3*.4)<cw*.6)o={ch:'0',h:220,s:10,l:12}; // mắt
+        else if(Math.abs(y-(c3+r3*.2))<ch*.5&&dx>cw*.2&&dx<r3*.95)o={ch:'>',h:28,s:100,l:55};          // mũi cà rốt
+        else o={ch:pick('08690'),h:205,s:25,l:clamp(90-dx/r3*6,78,97)};
+      }
+      else if(Math.abs(y-(c3+r3*.95))<ch*.55&&Math.abs(dx)<r3*1.05)o={ch:pick(DIG),h:354,s:85,l:52};  // khăn quàng
+      else if(inB(c2,r2)){
+        if(Math.abs(dx)<cw*.6&&(Math.abs(y-(c2-r2*.3))<ch*.5||Math.abs(y-(c2+r2*.3))<ch*.5))o={ch:'0',h:220,s:10,l:14}; // cúc áo
+        else o={ch:pick('08690'),h:205,s:25,l:clamp(88-dx/r2*6,76,96)};
+      }
+      else if(inB(c1,r1))o={ch:pick('08690'),h:205,s:25,l:clamp(86-dx/r1*6,72,95)};
+      else for(const sd of[-1,1]){                                                                     // tay que
+        const k=(sd*dx-r2*.85)/cw;
+        if(k>0&&k<3.5&&Math.abs((y-c2)+k*ch*.55)<ch*.5)o={ch:sd<0?'\\':'/',h:28,s:55,l:40};
+      }
+      if(o){o.type='snowman';o.delay=tb0+clamp((gb-y)/(gb-topY),0,1)*(tb1-tb0-.5);put(c,r,o)}
     }
   }
   // hoa hồng quanh gốc cây
@@ -290,6 +338,7 @@ function buildScene(){
       if(Math.abs(x-g.cx)<tw*1.5+rad*1.4)continue;
       if(x<rad*2||x>W-rad*2)continue;
       if(x>g.gift.x0-rad*1.8&&x<g.gift.x1+rad*1.8)continue; // chừa chỗ cho hộp quà
+      if(x>g.snowman.x0-rad*1.8&&x<g.snowman.x1+rad*1.8)continue; // và người tuyết
       if(spots.every(s=>Math.hypot(s.x-x,(s.y-y)*1.3)>s.rad+rad*1.9)){
         spots.push({x,y,rad,hue:pick([350,350,355,340,0,330]),i});break;
       }
@@ -413,14 +462,37 @@ function explode(f){
 }
 
 /* ---------- tương tác: tờ giấy, quà, sao băng, rung cây ---------- */
-function countdown(){
-  const now=new Date(),y=now.getFullYear();
-  const eve=new Date(y,11,24),end=new Date(y,11,26);
-  if(now>=eve&&now<end)return{xmas:true,text:'✦ Đêm nay là Giáng Sinh! ✦'};
-  const target=now>=end?new Date(y+1,11,24):eve;
-  const s=Math.floor((target-now)/1000),d=Math.floor(s/86400),p=n=>String(n).padStart(2,'0');
-  return{xmas:false,text:`còn ${d} ngày ${p(Math.floor(s%86400/3600))}:${p(Math.floor(s%3600/60))}:${p(s%60)} nữa là đến đêm Giáng Sinh 24/12`};
+// ?date=2026-12-31T23:59:50 trên link để xem thử một thời điểm khác
+const DATE_OFF=(()=>{try{const q=new URLSearchParams(location.search).get('date'),v=q?Date.parse(q):NaN;return isNaN(v)?0:v-Date.now()}catch(e){return 0}})();
+function fmt(ms){
+  const s=Math.max(0,Math.floor(ms/1000)),p=n=>String(n).padStart(2,'0');
+  return `${Math.floor(s/86400)} ngày ${p(Math.floor(s%86400/3600))}:${p(Math.floor(s%3600/60))}:${p(s%60)}`;
 }
+// lời chúc theo ngày: chờ Giáng Sinh → đêm Giáng Sinh → chờ Giao Thừa → mùng 1 Tết Dương lịch
+function getMode(){
+  const now=new Date(Date.now()+DATE_OFF),y=now.getFullYear(),m=now.getMonth(),d=now.getDate();
+  const X={title:'Merry Christmas',sub:'Giáng Sinh An Lành'};
+  if(m===0&&d===1){
+    const since=(now-new Date(y,0,1))/1000;
+    return{kind:'nyday',title:'Happy New Year',sub:`Chúc Mừng Năm Mới ${y}`,text:'✦ Chúc mừng năm mới! ✦',dense:since<120?7:3,left:-1};
+  }
+  if(m===11&&d>=26){
+    const ms=new Date(y+1,0,1)-now;
+    return{kind:'ny',title:'Happy New Year',sub:`Chúc Mừng Năm Mới ${y+1}`,text:`còn ${fmt(ms)} nữa là đến Giao Thừa`,dense:ms<60000?3:1,left:ms/1000};
+  }
+  if(m===11&&(d===24||d===25))return{kind:'xmas',...X,text:'✦ Đêm nay là Giáng Sinh! ✦',dense:3,left:-1};
+  return{kind:'wait',...X,text:`còn ${fmt(new Date(y,11,24)-now)} nữa là đến đêm Giáng Sinh 24/12`,dense:1,left:-1};
+}
+modeNow=getMode();
+// lắc điện thoại: cây rung, tuyết trên cành rơi, gió thổi
+function onMotion(e){
+  const a=e.accelerationIncludingGravity||e.acceleration;if(!a)return;
+  const m=Math.hypot(a.x||0,a.y||0,a.z||0),prev=onMotion.prev;onMotion.prev=m;
+  if(prev!==undefined&&Math.abs(m-prev)>13&&tNow-lastShake>1.2&&tNow>T.leaf+2){
+    lastShake=tNow;shakeTree();wind+=(Math.random()<.5?-1:1)*900;
+  }
+}
+addEventListener('devicemotion',onMotion);
 function wrap(text,maxW){
   const out=[];let cur='';
   for(const w of text.split(' ')){const tst=cur?cur+' '+w:w;if(ctx.measureText(tst).width>maxW&&cur){out.push(cur);cur=w}else cur=tst}
@@ -585,7 +657,8 @@ function frame(now){
   if(t>nextFw&&!reduce){
     launch(rnd(.08,.92)*W,rnd(.07,.38)*H);
     if(Math.random()<.35)launch(rnd(.08,.92)*W,rnd(.07,.38)*H);
-    nextFw=t+rnd(.5,1.4)/(xmasNow?3:1);
+    for(let i=1;i<Math.min(modeNow.dense,4);i++)if(Math.random()<.5)launch(rnd(.08,.92)*W,rnd(.07,.38)*H);
+    nextFw=t+rnd(.5,1.4)/modeNow.dense;
   }
   ctx.globalCompositeOperation='lighter';
   ctx.lineWidth=1;
@@ -664,6 +737,10 @@ function frame(now){
   }
   };
 
+  // gió từ cú vuốt / rê chuột, tắt dần
+  wind*=Math.pow(.25,dt);
+  const lean=reduce?0:clamp(wind/700,-1,1)*cw*1.6;
+
   // cảnh chữ số
   let rosesOpen=0,curCol='';
   const glows=[];
@@ -675,9 +752,12 @@ function frame(now){
     if(p<1){
       const e=easeOut(p);x=o.sx0+(o.x-o.sx0)*e;y=o.sy0+(o.y-o.sy0)*e;
       c=pick(DIG);a=0.35+0.65*p;
-    }else if(Math.random()<0.0015&&o.type!=='star'&&o.type!=='rose'){o.ch=c=pick(DIG)}
-    // cây rung khi được chạm: ngọn rung mạnh hơn gốc
-    if(o.u!==undefined&&t-shake<1.6){const e=t-shake;x+=Math.sin(e*30)*cw*.8*Math.exp(-e*3)*(1-o.u*.7)}
+    }else if(Math.random()<0.0015&&o.type!=='star'&&o.type!=='rose'&&o.type!=='snowman'){o.ch=c=pick(DIG)}
+    // cây rung khi được chạm: ngọn rung mạnh hơn gốc; gió làm cây nghiêng theo
+    if(o.u!==undefined){
+      if(t-shake<1.6){const e=t-shake;x+=Math.sin(e*30)*cw*.8*Math.exp(-e*3)*(1-o.u*.7)}
+      x+=lean*(1-o.u);
+    }
     // nắp và nơ hộp quà bay lên khi mở
     if(o.lid&&geo.gift.open){
       const e=t-geo.gift.open;if(e>1.2)continue;
@@ -723,6 +803,22 @@ function frame(now){
   curCol='';
   for(const r of roses)if(t>r.end)rosesOpen++;
   drawSanta();ctx.textAlign='left';
+  // người nhỏ: đi tới, đắp người tuyết, vẫy tay rồi đi về
+  const wk=geo.walker;
+  if(wk&&t>wk.t0&&t<wk.t3&&!reduce){
+    let wx,ph;
+    if(t<wk.t1){wx=wk.start+(t-wk.t0)*wk.sp;ph='walk'}
+    else if(t<wk.tb1){wx=wk.stand;ph='build'}
+    else if(t<wk.t2){wx=wk.stand;ph='wave'}
+    else{wx=wk.stand-(t-wk.t2)*wk.sp;ph='walk'}
+    const f=Math.floor(t/.2)%2,feet=groundTop(wx)+ch*.55,bob=ph==='walk'&&f?-1:0;
+    const arms=ph==='build'?(f?'\\|/':'-|-'):ph==='wave'?(f?'\\|_':'_|_'):'/|\\';
+    const fig=[['^','#e5484d'],['o','#f2c79b'],[arms,'#4a8ff0'],[ph==='walk'?(f?'/ \\':' | '):'/ \\','#8a95b0']];
+    ctx.globalAlpha=1;
+    fig.forEach(([s,col],i)=>{ctx.fillStyle=col;ctx.fillText(s,wx-s.length*cw/2,feet-(3-i)*ch+bob)});
+    if(ph==='build'&&Math.random()<dt*14)
+      bits.push({x:geo.snowman.x+rnd(-ch*1.5,ch*1.5),y:geo.snowman.bottom-rnd(0,ch*4),vx:rnd(-40,40),vy:rnd(-80,-20),ch:pick('*.'),col:'hsl(205,40%,92%)',age:0,life:rnd(.5,1)});
+  }
 
   // quầng sáng
   ctx.globalCompositeOperation='lighter';
@@ -771,8 +867,9 @@ function frame(now){
   if(t>T.snow){
     ctx.fillStyle='#fff';
     for(const f of flakes){
-      if(!reduce){f.y+=f.v*dt;f.x+=Math.sin(t*f.sw+f.ph)*10*dt}
+      if(!reduce){f.y+=f.v*dt;f.x+=Math.sin(t*f.sw+f.ph)*10*dt+wind*.4*dt}
       if(f.y>H){f.y=-10;f.x=rnd(0,W)}
+      if(f.x<-12)f.x=W+10;else if(f.x>W+12)f.x=-10;
       // bông tuyết chạm mép cành thì đọng lại
       if(t>T.lights){
         const c=Math.floor(f.x/cw),r=Math.round(f.y/ch-.82);let hit=null;
@@ -798,19 +895,19 @@ function frame(now){
     const gr=ctx.createLinearGradient(0,base-big,0,base);
     gr.addColorStop(0,'#fff3c8');gr.addColorStop(1,'#ffb347');
     ctx.fillStyle=gr;
-    ctx.fillText('Merry Christmas',W/2,base);
+    ctx.fillText(modeNow.title,W/2,base);
     const sub=Math.max(16,Math.round(big*0.62)),sy=base+sub*1.15;
     ctx.font=`600 ${sub}px "Dancing Script",Georgia,serif`;
     ctx.shadowColor='rgba(255,110,150,.85)';ctx.shadowBlur=14;
     const g2=ctx.createLinearGradient(0,sy-sub,0,sy);
     g2.addColorStop(0,'#ffd6e0');g2.addColorStop(1,'#ff6b8a');
     ctx.fillStyle=g2;
-    ctx.fillText('Giáng Sinh An Lành',W/2,sy);
+    ctx.fillText(modeNow.sub,W/2,sy);
     ctx.shadowBlur=0;
     // đếm ngược
-    const cd=countdown();
+    const cd=modeNow;
     ctx.font=`${Math.max(10,Math.round(fs*1.05))}px ${FONT}`;
-    ctx.fillStyle=cd.xmas?'#ffd36b':'#e0c48a';ctx.globalAlpha=a;
+    ctx.fillStyle=cd.dense>1?'#ffd36b':'#e0c48a';ctx.globalAlpha=a;
     ctx.shadowColor='#000';ctx.shadowBlur=6;
     ctx.fillText(cd.text,W/2,sy+Math.max(18,sub*.95));
     ctx.shadowBlur=0;
@@ -829,6 +926,14 @@ function frame(now){
       ctx.shadowBlur=0;ctx.textAlign='left';
     }
   }
+  // 10 giây cuối trước Giao Thừa: số đếm ngược lớn giữa trời
+  if(modeNow.kind==='ny'&&modeNow.left<=10&&modeNow.left>0){
+    const n=Math.ceil(modeNow.left),fr=n-modeNow.left,sz=Math.round(Math.min(W,H)*.28);
+    ctx.textAlign='center';ctx.font=`700 ${sz}px ${FONT}`;
+    ctx.globalAlpha=.25+.75*(1-fr);ctx.shadowColor='rgba(255,200,90,.9)';ctx.shadowBlur=30;
+    ctx.fillStyle='#ffe7a0';ctx.fillText(String(n),W/2,H*.5+sz*.35);
+    ctx.shadowBlur=0;ctx.textAlign='left';
+  }
   ctx.globalAlpha=1;
   if(paper)drawPaper(t);
   ctx.globalAlpha=1;
@@ -836,7 +941,7 @@ function frame(now){
   // HUD
   if(now-fpsT>200){
     fpsT=now;
-    xmasNow=countdown().xmas;
+    modeNow=getMode();
     $('timer').textContent='t '+(t<10?'0':'')+t.toFixed(2)+'s';
     $('iRose').textContent=rosesOpen+'/'+roses.length;
     $('iFw').textContent=fwCount;
@@ -847,6 +952,11 @@ function frame(now){
 
 cv.addEventListener('pointerdown',e=>{
   const x=e.clientX,y=e.clientY;
+  lastPtr={x,t:performance.now()};
+  // iPhone cần xin quyền cảm biến chuyển động từ một lần chạm
+  if(!motionAsked&&typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+    motionAsked=true;DeviceMotionEvent.requestPermission().catch(()=>{});
+  }
   if(paper){if(tNow-paper.t0>.4&&!paper.close)paper.close=tNow;return}
   if(hitSanta(x,y)){sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
   if(hitMeteor(x,y)){sparkleAt(x,y,34,48);wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
@@ -855,7 +965,10 @@ cv.addEventListener('pointerdown',e=>{
   launch(x,Math.min(y,H*0.7));
 });
 cv.addEventListener('pointermove',e=>{
-  const x=e.clientX,y=e.clientY;
+  const x=e.clientX,y=e.clientY,now=performance.now();
+  // tốc độ rê ngang tạo gió
+  if(lastPtr){const dtm=Math.max(8,now-lastPtr.t);const vx=(x-lastPtr.x)/dtm*1000;wind=clamp(wind*.7+vx*.3,-1600,1600)}
+  lastPtr={x,t:now};
   cv.style.cursor=(paper||hitSanta(x,y)||hitMeteor(x,y)||hitGift(x,y)||hitTree(x,y))?'pointer':'crosshair';
 });
 addEventListener('keydown',e=>{
