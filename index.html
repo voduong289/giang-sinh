@@ -39,13 +39,21 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 #bar .run{color:var(--amber)}
 #hint{top:calc(10px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));color:#3d4555}
 @media (max-width:820px){#hint{display:none}#info{display:none}}
+/* bốn góc khung kiểu cửa sổ terminal */
+.corner{position:fixed;width:18px;height:18px;border:0 solid #2b3445;pointer-events:none}
+#k1{top:calc(4px + env(safe-area-inset-top,0px));left:max(4px,env(safe-area-inset-left,0px));border-top-width:1px;border-left-width:1px}
+#k2{top:calc(4px + env(safe-area-inset-top,0px));right:max(4px,env(safe-area-inset-right,0px));border-top-width:1px;border-right-width:1px}
+#k3{bottom:calc(34px + env(safe-area-inset-bottom,0px));left:max(4px,env(safe-area-inset-left,0px));border-bottom-width:1px;border-left-width:1px}
+#k4{bottom:calc(34px + env(safe-area-inset-bottom,0px));right:max(4px,env(safe-area-inset-right,0px));border-bottom-width:1px;border-right-width:1px}
+#hint::before{content:"› ";color:#56607a}
 /* lúc mới vào cả trang tối, chữ góc màn hình hiện sau */
-.hud{animation:hudIn 1.5s ease 1.5s both}
+.hud,.corner{animation:hudIn 1.5s ease 1.5s both}
 @keyframes hudIn{from{opacity:0}}
-@media (prefers-reduced-motion:reduce){.hud{animation:none}}
+@media (prefers-reduced-motion:reduce){.hud,.corner{animation:none}}
 </style>
 
 <canvas id="c" aria-label="Cây thông Noel và hoa hồng dựng từ chữ số, pháo hoa trên bầu trời đêm"></canvas>
+<div class="corner" id="k1"></div><div class="corner" id="k2"></div><div class="corner" id="k3"></div><div class="corner" id="k4"></div>
 <div class="hud" id="hint">bấm trời: pháo hoa · chạm cây, hộp quà, sao băng, ông già Noel · rê chuột: gió · R: dựng lại</div>
 <div class="hud" id="timer">t 00.00s</div>
 <div class="hud" id="info">
@@ -91,6 +99,14 @@ glow.moon=makeGlow('rgba(255,236,190,1)');
 let clouds=[];
 let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0;
 let wind=0,lastPtr=null,lastShake=-9,motionAsked=false,modeNow=null;
+let skyBg=null,milky=null,moonDim=1,refl=[];
+// đèn trên cây có đang sáng không (dùng để hắt màu đèn xuống lá xung quanh)
+function lightOn(s,t){
+  if(s.type==='orn')return Math.sin(t*2.2+s.tw)>-.3;
+  if(lightMode===2)return true;
+  if(lightMode===1)return Math.sin(t*7-s.y*.06)>.3;
+  return Math.sin(t*3+s.tw)>.1;
+}
 // mây dựng từ chữ số: hợp của vài khối tròn, lõi là số, mép là dấu chấm
 function makeCloud(w,h){
   const blobs=[],n=Math.round(rnd(5,7));
@@ -112,7 +128,8 @@ function makeCloud(w,h){
     if(best<=0||y>h*.86)continue;
     if(best<.25&&Math.random()<.45)continue;
     const top=1-y/h,edge=best<.18;
-    cells.push({x,y,ch:edge?pick('.:·'):pick('0689023'),l:edge?44:clamp(40+top*42+best*12,40,88),edge});
+    // mặt trên và phía phải (hướng trăng) sáng hơn
+    cells.push({x,y,ch:edge?pick('.:·'):pick('0689023'),l:edge?44:clamp(38+top*40+best*12+(x/w-.5)*14,36,90),edge});
   }
   return cells;
 }
@@ -121,8 +138,9 @@ function drawMoon(t){
   // trăng hiện dần và nhô lên nhẹ
   const k=clamp((t-T.moon)/3,0,1);if(k<=0)return;
   const my=m.y+(1-easeOut(k))*m.R*1.5;
+  // moonDim < 1 khi có mây trôi ngang qua trăng
   ctx.globalCompositeOperation='lighter';
-  ctx.globalAlpha=(.4+.05*Math.sin(t*.8))*k;
+  ctx.globalAlpha=(.4+.05*Math.sin(t*.8))*k*moonDim;
   ctx.drawImage(glow.moon,m.x-m.R*4,my-m.R*4,m.R*8,m.R*8);
   ctx.globalCompositeOperation='source-over';
   let cur='';
@@ -130,7 +148,7 @@ function drawMoon(t){
     if(Math.random()<.003)c.ch=pick(c.dark?'0689':'8890');
     const col=`hsl(${c.dark?42:48},${c.dark?40:85}%,${c.l}%)`;
     if(col!==cur){ctx.fillStyle=col;cur=col}
-    ctx.globalAlpha=k;ctx.fillText(c.ch,m.x+c.x,my+c.y);
+    ctx.globalAlpha=k*(.45+.55*moonDim);ctx.fillText(c.ch,m.x+c.x,my+c.y);
   }
 }
 function buildMoonCells(m){
@@ -191,6 +209,8 @@ function buildScene(){
   g.sx=g.cx;g.sy=g.treeTop-g.SR*0.25;
   g.groundY=H*0.875;
   g.bottom=H-30;
+  const MR=clamp(Math.min(W,H)*0.075,32,88);
+  g.moonX=W-Math.max(MR*1.8,W*0.14);
 
   const map=new Map(),under=[];
   // ô bị thứ khác đè lên (tuyết dưới cây, lá dưới hộp quà...) vẫn được giữ lại
@@ -208,9 +228,23 @@ function buildScene(){
     if(y<gt||y>g.bottom)continue;
     const depth=(y-gt)/(g.bottom-gt);
     if(y-gt<ch*1.2&&Math.random()<0.18)continue; // mép tuyết hơi lởm chởm
-    const L=rnd(72,92)-depth*14, sp=Math.random()<0.04;
+    // vệt sáng của trăng in trên tuyết
+    const L=rnd(70,90)-depth*14+8*Math.exp(-(((x-g.moonX)/(W*.12))**2)), sp=Math.random()<0.04;
     put(c,r,{type:sp?'snowsp':'snow',ch:pick(sp?'*+':'08690860'),h:205,s:rnd(10,35),l:L,
       delay:T.snow+(1-depth)*1.2+rnd(0,.2),tw:rnd(0,7)});
+  }
+  // rặng thông xa ở chân trời, màu xanh tối, phía sau mọi thứ
+  for(let px=rnd(0,W/30);px<W;px+=rnd(W/40,W/22)){
+    const gt=groundTop(px),h=ch*rnd(2.5,6.5)*(W<600?.8:1);
+    for(let r=Math.floor((gt-h)/ch);r<=Math.floor(gt/ch);r++)for(let c=Math.floor((px-h*.45)/cw);c<=Math.ceil((px+h*.45)/cw);c++){
+      if(r<0||c<0||c>=cols)continue;
+      const x=(c+.5)*cw,y=(r+.5)*ch;
+      if(y>=groundTop(x))continue;
+      const k=(y-(gt-h))/h;if(k<0)continue;
+      if(Math.abs(x-px)>h*.38*k*(1+.12*Math.sin(y*.5)))continue;
+      if(map.has(r*cols+c))continue;
+      put(c,r,{type:'ridge',ch:pick(DIG),h:rnd(150,175),s:30,l:rnd(10,16)+(x>px?4:0),delay:T.snow+1.2+rnd(0,.9)});
+    }
   }
   // thân cây
   const tw=g.TH*0.05;
@@ -250,8 +284,10 @@ function buildScene(){
       }else if(Math.random()<0.035&&!edge){
         o={type:'light',ch:pick('*+o'),g:pick(['gold','white','blue','pink','green']),h:0,s:0,l:0,tw:rnd(0,7),delay};
       }else{
-        const shade=-dx/g.HW*7+(1-u)*-4;
+        // ánh trăng chiếu từ phía phải: nửa phải sáng hơn, mép phải được viền sáng
+        const shade=dx/g.HW*7+(1-u)*-4;
         o={type:'tree',ch:pick(DIG),h:rnd(118,148),s:rnd(55,75),l:clamp((edge?40:24)+shade+rnd(-6,6),12,52),delay};
+        if(edge&&dx>0&&!inTree(x+cw*1.2,y))o.moonEdge=1;
       }
     }
     // đèn, trang trí và dây kim tuyến: lúc đầu là lá xanh, sau đó mới sáng lên từ dưới lên
@@ -385,7 +421,30 @@ function buildScene(){
     o.end=o.delay+o.dur;
     o.col=`hsl(${o.h|0},${o.s|0}%,${o.l|0}%)`;
     if(o.rose)o.rose.end=Math.max(o.rose.end,o.end);
+    if(o.type==='tree'){
+      o.wcol=`hsl(${o.h|0},${o.s|0}%,${Math.min(72,o.l+20)|0}%)`;           // màu khi sóng sáng chạy qua
+      if(o.moonEdge)o.mcol=`hsl(${(o.h+25)|0},38%,${Math.min(68,o.l+18)|0}%)`; // viền ánh trăng
+    }
   }
+  // đèn và quả châu hắt màu xuống các ô lá xung quanh
+  const tintHue={red:352,gold:45,blue:212,pink:325,green:140,white:50};
+  for(const s of cells){
+    if(s.type!=='light'&&s.type!=='orn')continue;
+    const hue=tintHue[s.g]??45;
+    for(let dr=-2;dr<=2;dr++)for(let dc=-3;dc<=3;dc++){
+      const o=map.get((s.r+dr)*cols+s.c+dc);if(!o||o.type!=='tree')continue;
+      const d=Math.hypot(dc*cw,dr*ch)/ch;if(d>2.3)continue;
+      if(o.tint&&o.tint.d<=d)continue;
+      o.tint={src:s,d,col:`hsl(${hue},${s.type==='orn'?75:65}%,${clamp(o.l+18-d*4,30,62)|0}%)`};
+    }
+  }
+  // những thứ in bóng xuống mặt tuyết bóng loáng
+  refl=cells.filter(o=>{
+    if(o.type==='gift'||o.type==='bow'){o.mb=g.gift.y1-ch*.15;return true}
+    if(o.type==='snowman'){o.mb=g.snowman.bottom-ch*.1;return true}
+    if(o.type==='trunk'){o.mb=groundTop(g.cx)+ch*1.3;return true}
+    return false;
+  });
   // mép trên các tầng lá: chỗ tuyết rơi xuống sẽ đọng lại
   gridMap=map;ledges=[];
   const TT={tree:1,garland:1,orn:1,light:1,star:1};
@@ -417,8 +476,32 @@ function buildSky(){
     const w=rnd(.3,.42)*Math.max(W,700),h=Math.max(ch*9,w*rnd(.5,.58));
     clouds.push({cells:makeCloud(w,h),x:rnd(-w*.3,W-w*.7),y:rnd(.08,.3)*H-h/2,w,h,v:rnd(5,13),a:rnd(.4,.65),in:rnd(4,6.5)});
   }
+  // tuyết rơi 3 lớp: xa (nhỏ, mờ, chậm), giữa, gần (to, nhanh, có quầng nhoè)
   flakes=[];
-  for(let i=0;i<Math.round(W/10);i++)flakes.push({x:rnd(0,W),y:rnd(-H,H),v:rnd(14,40),sw:rnd(.5,1.5),ph:rnd(0,7),ch:pick('*..·+'),a:rnd(.25,.7)});
+  const add=(n,L)=>{for(let i=0;i<n;i++)flakes.push({x:rnd(0,W),y:rnd(-H,H),L,
+    v:L===0?rnd(8,18):L===1?rnd(14,40):rnd(55,90),sw:rnd(.5,1.5),ph:rnd(0,7),
+    ch:L===0?pick('.·'):L===1?pick('*..·+'):'*',a:L===0?rnd(.15,.35):L===1?rnd(.25,.7):rnd(.45,.8)})};
+  add(Math.round(W/9),0);add(Math.round(W/10),1);add(Math.round(W/45),2);
+  flakes.sort((a,b)=>a.L-b.L);
+  // nền trời: đen ở đỉnh, ngả xanh than rất nhẹ về chân trời
+  skyBg=ctx.createLinearGradient(0,0,0,H);
+  skyBg.addColorStop(0,'#000002');skyBg.addColorStop(.55,'#02040c');skyBg.addColorStop(.86,'#081128');skyBg.addColorStop(1,'#050a1a');
+  // dải Ngân Hà bằng chấm và chữ số li ti, vẽ sẵn một lần
+  milky=document.createElement('canvas');milky.width=Math.round(W*dpr);milky.height=Math.round(H*dpr);
+  const m=milky.getContext('2d');m.setTransform(dpr,0,0,dpr,0,0);
+  const ax=-W*.05,ay=H*.04,bx=W*1.05,by=H*.58,len=Math.hypot(bx-ax,by-ay),ux=(bx-ax)/len,uy=(by-ay)/len,nx=-uy,ny=ux;
+  m.save();m.translate((ax+bx)/2,(ay+by)/2);m.rotate(Math.atan2(uy,ux));m.scale(1,.15);
+  const gr=m.createRadialGradient(0,0,0,0,0,len*.55);
+  gr.addColorStop(0,'rgba(150,160,225,.11)');gr.addColorStop(.6,'rgba(115,100,185,.05)');gr.addColorStop(1,'rgba(0,0,0,0)');
+  m.fillStyle=gr;m.beginPath();m.arc(0,0,len*.55,0,TAU);m.fill();m.restore();
+  m.font=`${Math.max(7,Math.round(fs*.6))}px ${FONT}`;
+  for(let i=0,n=Math.round(W*H/650);i<n;i++){
+    const s=Math.random()*len,off=(Math.random()+Math.random()+Math.random()-1.5)*H*.09*(.6+.6*Math.sin(s/len*Math.PI));
+    const x=ax+ux*s+nx*off,y=ay+uy*s+ny*off,a=rnd(.08,.38)*(1-Math.abs(off)/(H*.16));
+    if(a<=0)continue;
+    m.globalAlpha=a;m.fillStyle=Math.random()<.3?'#c9b8ff':'#dfe6ff';
+    if(Math.random()<.16)m.fillText(pick(DIG),x,y);else{const z=Math.random()<.2?1.3:.8;m.fillRect(x,y,z,z)}
+  }
 }
 
 function setup(){
@@ -586,6 +669,12 @@ function frame(now){
   const t=(now-start)/1000;tNow=t;
   ctx.globalCompositeOperation='source-over';
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  // trời ngả xanh than và Ngân Hà hiện dần cùng các vì sao
+  const sk=clamp((t-T.stars)/4,0,1);
+  if(sk>0){
+    ctx.globalAlpha=sk;ctx.fillStyle=skyBg;ctx.fillRect(0,0,W,H);
+    ctx.drawImage(milky,0,0,W,H);ctx.globalAlpha=1;
+  }
   ctx.textBaseline='alphabetic';
   ctx.font=`${fs}px ${FONT}`;
 
@@ -621,6 +710,7 @@ function frame(now){
     const k=reduce?1:clamp((t-T.clouds)/c.in,0,1),e=easeOut(k);
     if(k<=0)continue;
     const cx=c.x-(1-e)*(c.x+c.w+40);
+    c.cxNow=cx;c.kNow=k;
     let cur='';
     for(const q of c.cells){
       if(Math.random()<.002&&!q.edge)q.ch=pick('0689023');
@@ -630,6 +720,16 @@ function frame(now){
     }
   }
   ctx.globalAlpha=1;
+  // mây che trăng: trăng và ánh trăng trên cảnh tối đi
+  {
+    const m=geo.moon;let cov=0;
+    if(m)for(const c of clouds){
+      if(!c.kNow)continue;
+      const ix=(m.x-c.cxNow)/c.w,iy=(m.y-c.y)/c.h;
+      if(ix>.05&&ix<.95&&iy>.15&&iy<.9)cov=Math.max(cov,clamp(Math.min(ix-.05,.95-ix,iy-.15,.9-iy)*6,0,1)*c.a*1.5*Math.min(1,c.kNow*2));
+    }
+    moonDim+=((1-.6*clamp(cov,0,1))-moonDim)*Math.min(1,dt*3);
+  }
 
   // sao băng: bấm trúng là gửi điều ước
   if(!meteor&&t>nextMeteor&&!reduce){
@@ -752,7 +852,7 @@ function frame(now){
     if(p<1){
       const e=easeOut(p);x=o.sx0+(o.x-o.sx0)*e;y=o.sy0+(o.y-o.sy0)*e;
       c=pick(DIG);a=0.35+0.65*p;
-    }else if(Math.random()<0.0015&&o.type!=='star'&&o.type!=='rose'&&o.type!=='snowman'){o.ch=c=pick(DIG)}
+    }else if(Math.random()<0.0015&&o.type!=='star'&&o.type!=='rose'&&o.type!=='snowman'&&o.type!=='tree'){o.ch=c=pick(DIG)}
     // cây rung khi được chạm: ngọn rung mạnh hơn gốc; gió làm cây nghiêng theo
     if(o.u!==undefined){
       if(t-shake<1.6){const e=t-shake;x+=Math.sin(e*30)*cw*.8*Math.exp(-e*3)*(1-o.u*.7)}
@@ -785,6 +885,13 @@ function frame(now){
         const wave=Math.pow(Math.max(0,Math.sin(t*2.2-(o.x-geo.sx)/geo.SR*1.6-(o.y-geo.sy)/geo.SR)),4);
         col=`hsl(${46+k*6|0},100%,${Math.min(97,o.l-4+k*12+wave*30)|0}%)`;break}
     }
+    if(o.type==='tree'&&p>=1){
+      // cây "thở": một làn sáng chạy từ gốc lên ngọn, chữ số đổi theo làn sóng
+      const wv=((t*.28-(1-o.u))%1+1)%1;
+      if(wv<.035){col=o.wcol;if(Math.random()<.25)o.ch=c=pick(DIG)}
+      else if(o.tint&&t>o.tint.src.lightAt&&lightOn(o.tint.src,t))col=o.tint.col; // đèn hắt màu xuống lá
+      else if(o.moonEdge&&moonDim>.65)col=o.mcol;                                  // viền ánh trăng
+    }
     if(o.cap&&p>=1){col='hsl(205,35%,93%)';c=o.capCh} // tuyết đọng trên cành
     if(col!==curCol){ctx.fillStyle=col;curCol=col}
     ctx.globalAlpha=a;
@@ -801,6 +908,32 @@ function frame(now){
     ctx.globalAlpha=Math.min(1,(b.life-b.age)/.6);ctx.fillStyle=b.col;ctx.fillText(b.ch,b.x,b.y);
   }
   curCol='';
+  // mặt tuyết: bóng phản chiếu, ánh trăng, ánh pháo hoa và ánh đèn
+  {
+    const g=geo,gy=(g.groundY+g.bottom)/2,gh=g.bottom-g.groundY;
+    for(const o of refl){
+      if(t<o.end||(o.hideAt!==undefined&&t>o.hideAt))continue;
+      if(o.lid&&g.gift.open)continue;
+      const my=2*o.mb-o.y+ch*.55;if(my>g.bottom||my<o.mb)continue;
+      ctx.globalAlpha=.16*(1-(my-o.mb)/(ch*4.5));if(ctx.globalAlpha<=0)continue;
+      ctx.fillStyle=o.col;ctx.fillText(o.ch,o.x,my);
+    }
+    ctx.globalCompositeOperation='lighter';
+    const ell=(x,rx,col,a)=>{
+      ctx.save();ctx.translate(x,gy);ctx.scale(1,gh*.9/rx);
+      const gr=ctx.createRadialGradient(0,0,0,0,0,rx);gr.addColorStop(0,col);gr.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.globalAlpha=a;ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,rx,0,TAU);ctx.fill();ctx.restore();
+    };
+    const mk=clamp((t-T.moon)/3,0,1)*clamp((t-T.snow)/2,0,1);
+    if(mk>0)ell(g.moonX,W*.13,'rgba(255,242,205,1)',.09*mk*moonDim);
+    for(const b of bursts)if(b.age<.8)ell(b.x,W*.17,`hsl(${b.hue},${Math.min(100,b.sat+30)|0}%,70%)`,.2*(1-b.age/.8));
+    // đèn sáng in bóng mờ xuống tuyết
+    for(const q of glows){
+      const my=2*groundTop(q[1])-q[2];
+      if(my<g.bottom&&my>g.groundY){ctx.globalAlpha=q[4]*.35;const R=q[3]*1.3;ctx.drawImage(glow[q[0]],q[1]-R/2,my-R/2,R,R)}
+    }
+    ctx.globalCompositeOperation='source-over';
+  }
   for(const r of roses)if(t>r.end)rosesOpen++;
   drawSanta();ctx.textAlign='left';
   // người nhỏ: đi tới, đắp người tuyết, vẫy tay rồi đi về
@@ -866,18 +999,22 @@ function frame(now){
   // tuyết rơi
   if(t>T.snow){
     ctx.fillStyle='#fff';
+    let curL=-1;
     for(const f of flakes){
-      if(!reduce){f.y+=f.v*dt;f.x+=Math.sin(t*f.sw+f.ph)*10*dt+wind*.4*dt}
+      if(f.L!==curL){curL=f.L;ctx.font=`${curL===2?Math.round(fs*1.7):curL===0?Math.max(7,Math.round(fs*.75)):fs}px ${FONT}`}
+      if(!reduce){f.y+=f.v*dt;f.x+=Math.sin(t*f.sw+f.ph)*(10+f.L*8)*dt+wind*(.2+f.L*.25)*dt}
       if(f.y>H){f.y=-10;f.x=rnd(0,W)}
       if(f.x<-12)f.x=W+10;else if(f.x>W+12)f.x=-10;
-      // bông tuyết chạm mép cành thì đọng lại
-      if(t>T.lights){
+      if(f.L===2){ctx.globalAlpha=f.a*.22*Math.min(1,(t-T.snow)/2);ctx.drawImage(glow.white,f.x-fs*.3,f.y-fs*1.5,fs*2.2,fs*2.2)}
+      // bông tuyết lớp giữa chạm mép cành thì đọng lại
+      if(t>T.lights&&f.L===1){
         const c=Math.floor(f.x/cw),r=Math.round(f.y/ch-.82);let hit=null;
         for(const dr of[0,1]){const o=gridMap.get((r+dr)*cols+c);if(o&&o.ledge&&!o.cap){hit=o;break}}
         if(hit){hit.cap=true;hit.capCh=pick('08*.');f.y=-10;f.x=rnd(0,W);continue}
       }
       ctx.globalAlpha=f.a*Math.min(1,(t-T.snow)/2);ctx.fillText(f.ch,f.x,f.y);
     }
+    ctx.font=`${fs}px ${FONT}`;
     // càng xem lâu cây càng phủ tuyết
     if(t>T.lights+2&&ledges.length&&!reduce&&Math.random()<dt*1.5){const o=pick(ledges);o.cap=true;o.capCh=pick('08*.')}
   }
