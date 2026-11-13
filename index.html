@@ -34,7 +34,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 </style>
 
 <canvas id="c" aria-label="Cây thông Noel và hoa hồng dựng từ chữ số, pháo hoa trên bầu trời đêm"></canvas>
-<div class="hud" id="hint">bấm để bắn pháo hoa · phím R để dựng lại</div>
+<div class="hud" id="hint">bấm trời: pháo hoa · chạm cây thông, hộp quà, sao băng, ông già Noel · phím R: dựng lại</div>
 <div class="hud" id="timer">t 00.00s</div>
 <div class="hud" id="info">
   <div style="color:var(--fg)">@noel.ascii</div>
@@ -55,7 +55,12 @@ const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const easeOut=p=>1-Math.pow(1-p,3);
 const FONT='"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,"DejaVu Sans Mono",monospace';
 // trình tự xuất hiện (giây): trời đen → sao, trăng, mây → tuyết dâng → thân cây → lá → đèn → ngôi sao → hoa hồng → lời chúc, pháo hoa → ông già Noel
-const T={stars:.8,moon:1.2,clouds:.6,snow:1.8,trunk:3.5,leaf:4.6,lights:8.4,star:10,rose:11.2,greet:14.8,fw:15.6,santa:17.5};
+const T={stars:.8,moon:1.2,clouds:.6,snow:1.8,trunk:3.5,leaf:4.6,lights:8.4,star:10,rose:11.2,gift:14,greet:14.8,fw:15.6,santa:17.5};
+// lời nhắn trên tờ giấy (sửa nội dung ở đây)
+const MSG={
+  gift:{title:'Món quà nhỏ cho bạn',body:'Chúc bạn một mùa Giáng Sinh thật ấm áp, luôn có những người thương yêu ở bên, và một năm mới gặp thật nhiều may mắn, bình an và hạnh phúc.'},
+  santa:{title:'Ho ho ho! Merry Christmas!',body:'Ông già Noel ghé qua gửi lời chúc: Giáng Sinh an lành, ấm áp bên gia đình. Mong mọi điều ước của bạn đều thành sự thật!'}
+};
 
 let W,H,dpr,fs,cw,ch,cols,rows,cells=[],stars=[],sparkles=[],flakes=[],fws=[],parts=[],roses=[];
 let start=0,lastFw=0,fwCount=0,nextFw=0,greetT=0,geo={};
@@ -72,6 +77,7 @@ glow.blue=makeGlow('rgba(90,160,255,1)');glow.pink=makeGlow('rgba(255,120,200,1)
 glow.white=makeGlow('rgba(255,255,255,1)');glow.green=makeGlow('rgba(120,255,160,1)');
 glow.moon=makeGlow('rgba(255,236,190,1)');
 let clouds=[];
+let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0,xmasNow=false;
 // mây dựng từ chữ số: hợp của vài khối tròn, lõi là số, mép là dấu chấm
 function makeCloud(w,h){
   const blobs=[],n=Math.round(rnd(5,7));
@@ -228,6 +234,7 @@ function buildScene(){
       }
     }
     // đèn, trang trí và dây kim tuyến: lúc đầu là lá xanh, sau đó mới sáng lên từ dưới lên
+    o.u=u;
     o.lightAt=T.lights+(1-u)*1.3+rnd(0,.3);
     o.leaf=`hsl(${rnd(118,148)|0},65%,${edge?40:26}%)`;
     put(c,r,o);
@@ -237,7 +244,27 @@ function buildScene(){
     const x=(c+.5)*cw,y=(r+.5)*ch;
     if(inStar(x,y)){
       const d=Math.hypot(x-g.sx,y-g.sy)/g.SR;
-      put(c,r,{type:'star',ch:pick(d<.45?'8':'*'),h:48,s:100,l:72-d*18,delay:T.star+d*.4+rnd(0,.15),tw:rnd(0,7)});
+      put(c,r,{type:'star',u:0,ch:pick(d<.45?'8':'*'),h:48,s:100,l:72-d*18,delay:T.star+d*.4+rnd(0,.15),tw:rnd(0,7)});
+    }
+  }
+  // hộp quà bằng chữ số, bên phải gốc cây
+  {
+    const gw=Math.max(cw*13,g.TH*0.19),gh=Math.max(ch*4.2,gw*0.6);
+    const x0=g.cx+tw*2.2,x1=x0+gw,y1=groundTop(g.cx)+ch*1.1,y0=y1-gh,mx=(x0+x1)/2,my=(y0+y1)/2;
+    g.gift={x0:x0-cw,x1:x1+cw,y0:y0-ch*2.4,top:y0,y1,mx,open:0};
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const x=(c+.5)*cw,y=(r+.5)*ch,rib=Math.abs(x-mx)<cw*.9;
+      let o=null;
+      if(x>x0&&x<x1&&y>y0&&y<y1){
+        o=(rib||Math.abs(y-my)<ch*.55)?{type:'gift',ch:pick('8098'),h:46,s:95,l:62}
+          :{type:'gift',ch:pick(DIG),h:354,s:88,l:clamp(54-(x-mx)/gw*14+rnd(-4,4),42,64)};
+      }else if(x>x0-cw&&x<x1+cw&&y>y0-ch*1.15&&y<=y0){
+        o=rib?{type:'gift',ch:pick('8098'),h:46,s:95,l:68,lid:1}:{type:'gift',ch:pick(DIG),h:354,s:90,l:62,lid:1};
+      }else if(y>y0-ch*2.3&&y<=y0-ch*1.15){
+        const ax=Math.abs(x-mx);
+        if(ax<cw*.6||(ax>cw&&ax<cw*2.8))o={type:'bow',ch:ax<cw*.6?'@':pick('oO0'),h:46,s:100,l:64,lid:1,tw:rnd(0,7)};
+      }
+      if(o){o.delay=T.gift+clamp((y1-y)/(gh+ch*2.3),0,1)+rnd(0,.1);put(c,r,o)}
     }
   }
   // hoa hồng quanh gốc cây
@@ -254,6 +281,7 @@ function buildScene(){
       const rad=ch*rnd(1.7,2.2)*persp*(W<600?0.8:1);
       if(Math.abs(x-g.cx)<tw*1.5+rad*1.4)continue;
       if(x<rad*2||x>W-rad*2)continue;
+      if(x>g.gift.x0-rad*1.8&&x<g.gift.x1+rad*1.8)continue; // chừa chỗ cho hộp quà
       if(spots.every(s=>Math.hypot(s.x-x,(s.y-y)*1.3)>s.rad+rad*1.9)){
         spots.push({x,y,rad,hue:pick([350,350,355,340,0,330]),i});break;
       }
@@ -300,6 +328,14 @@ function buildScene(){
     o.col=`hsl(${o.h|0},${o.s|0}%,${o.l|0}%)`;
     if(o.rose)o.rose.end=Math.max(o.rose.end,o.end);
   }
+  // mép trên các tầng lá: chỗ tuyết rơi xuống sẽ đọng lại
+  gridMap=map;ledges=[];
+  const TT={tree:1,garland:1,orn:1,light:1,star:1};
+  for(const o of cells){
+    if(o.u===undefined||o.type==='star')continue;
+    const up=map.get((o.r-1)*cols+o.c);
+    if(!up||!TT[up.type]){o.ledge=true;ledges.push(o)}
+  }
   // vẽ theo thứ tự để giảm đổi màu
   cells.sort((a,b)=>a.r-b.r);
   $('iDig').textContent=cells.length.toLocaleString('en-US');
@@ -338,6 +374,7 @@ function setup(){
   cols=Math.ceil(W/cw);rows=Math.ceil(H/ch);
   buildScene();buildSky();
   fws=[];parts=[];bursts.length=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
+  paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   try{document.fonts.load('700 40px "Dancing Script"','Giáng Sinh')}catch(e){}
   start=performance.now();
 }
@@ -366,12 +403,106 @@ function explode(f){
   }
 }
 
+/* ---------- tương tác: tờ giấy, quà, sao băng, rung cây ---------- */
+function countdown(){
+  const now=new Date(),y=now.getFullYear();
+  const eve=new Date(y,11,24),end=new Date(y,11,26);
+  if(now>=eve&&now<end)return{xmas:true,text:'✦ Đêm nay là Giáng Sinh! ✦'};
+  const target=now>=end?new Date(y+1,11,24):eve;
+  const s=Math.floor((target-now)/1000),d=Math.floor(s/86400),p=n=>String(n).padStart(2,'0');
+  return{xmas:false,text:`còn ${d} ngày ${p(Math.floor(s%86400/3600))}:${p(Math.floor(s%3600/60))}:${p(s%60)} nữa là đến đêm Giáng Sinh 24/12`};
+}
+function wrap(text,maxW){
+  const out=[];let cur='';
+  for(const w of text.split(' ')){const tst=cur?cur+' '+w:w;if(ctx.measureText(tst).width>maxW&&cur){out.push(cur);cur=w}else cur=tst}
+  if(cur)out.push(cur);return out;
+}
+function segDist(px,py,ax,ay,bx,by){
+  const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy,k=l?clamp(((px-ax)*dx+(py-ay)*dy)/l,0,1):0;
+  return Math.hypot(px-ax-k*dx,py-ay-k*dy);
+}
+function hitSanta(x,y){
+  const s=santa;if(!s)return false;
+  const E=s.E,yy=s.y+Math.sin(tNow*2.4)*E*.25;
+  return x>s.x-E*.2&&x<s.x+E*3.4&&y>yy-E*1.3&&y<yy+E*.4;
+}
+function hitGift(x,y){const g=geo.gift;return g&&tNow>T.gift+1.2&&x>g.x0&&x<g.x1&&y>g.y0&&y<g.y1+ch*.5}
+function hitMeteor(x,y){const m=meteor;return !!m&&segDist(x,y,m.x,m.y,m.x-m.vx*.22,m.y-m.vy*.22)<40}
+function hitTree(x,y){return tNow>T.leaf+2&&inTree(x,y)}
+function sparkleAt(x,y,n,hue){
+  for(let i=0;i<n;i++){const a=rnd(0,TAU),v=rnd(40,150);parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,age:0,life:rnd(.8,1.6),tw:rnd(0,7),sz:rnd(2,4),hue,sat:90})}
+}
+function openPaper(m,delay=0){paper={m,t0:tNow+delay,close:0,grid:null}}
+function openGift(){
+  const g=geo.gift;
+  if(!g.open){
+    g.open=tNow;
+    for(let i=0;i<70;i++){
+      const a=rnd(-Math.PI*.95,-Math.PI*.05),v=rnd(120,320);
+      bits.push({x:g.mx,y:g.top,vx:Math.cos(a)*v,vy:Math.sin(a)*v,ch:pick(DIG),col:`hsl(${pick([0,45,120,200,320,280])},90%,65%)`,age:0,life:rnd(1.6,2.6),conf:1});
+    }
+    openPaper(MSG.gift,.8);
+  }else openPaper(MSG.gift);
+}
+function shakeTree(){
+  shake=tNow;lightMode=(lightMode+1)%3;
+  const tc=cells.filter(o=>o.u!==undefined&&o.type!=='star'&&tNow>o.end);
+  for(let i=0;i<14&&tc.length;i++){const o=pick(tc);bits.push({x:o.x,y:o.y,vx:rnd(-30,30),vy:rnd(-20,20),ch:pick(DIG),col:o.col,age:0,life:rnd(1.8,2.8)})}
+  for(const o of ledges)if(o.cap&&Math.random()<.7){
+    o.cap=false;
+    if(Math.random()<.5)bits.push({x:o.x,y:o.y-ch*.3,vx:rnd(-25,25),vy:rnd(-30,0),ch:o.capCh,col:'hsl(205,35%,93%)',age:0,life:rnd(1.5,2.5)});
+  }
+}
+// tờ giấy: nền dệt bằng chữ số, cuộn mở từ trên xuống, chữ viết tay
+function drawPaper(t){
+  const P=paper,age=t-P.t0;if(age<0)return;
+  let k=easeOut(clamp(age/.7,0,1));
+  if(P.close){const e=(t-P.close)/.35;if(e>=1){paper=null;return}k*=1-e}
+  const PW=Math.min(W-32,540),pad=Math.max(22,PW*.08);
+  const ts=clamp(Math.round(PW/14),22,38),bs=clamp(Math.round(PW/22),17,25);
+  ctx.save();
+  ctx.globalAlpha=.6*k;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  ctx.font=`600 ${bs}px "Dancing Script",Georgia,serif`;
+  const lines=wrap(P.m.body,PW-pad*2);
+  const PH=pad*2+ts*1.5+lines.length*bs*1.4+fs*2.6;
+  const px=(W-PW)/2,py=(H-PH)/2,vis=PH*Math.min(1,k*1.15);
+  if(!P.grid){P.grid=[];for(let i=0;i<5000;i++)P.grid.push(pick(DIG))}
+  ctx.globalAlpha=k;
+  ctx.beginPath();ctx.rect(px-12,py-ch,PW+24,vis+ch);ctx.clip();
+  ctx.fillStyle='#efe3c4';ctx.fillRect(px,py,PW,PH);
+  ctx.font=`${fs}px ${FONT}`;
+  const c2=Math.floor(PW/cw),r2=Math.floor(PH/ch),ox=px+(PW-c2*cw)/2,oy=py+(PH-r2*ch)/2;
+  let n=0;
+  for(let r=0;r<r2;r++)for(let c=0;c<c2;c++){
+    const edge=r===0||c===0||r===r2-1||c===c2-1;
+    ctx.fillStyle=edge?'#b07a45':'#e2d1a8';ctx.fillText(P.grid[n++%5000],ox+c*cw,oy+(r+.82)*ch);
+  }
+  ctx.globalAlpha=clamp((age-.45)/.4,0,1)*k;ctx.textAlign='center';
+  ctx.font=`700 ${ts}px "Dancing Script",Georgia,serif`;ctx.fillStyle='#9b1c2e';
+  ctx.fillText(P.m.title,W/2,py+pad+ts);
+  ctx.font=`600 ${bs}px "Dancing Script",Georgia,serif`;ctx.fillStyle='#4a2c16';
+  lines.forEach((l,i)=>ctx.fillText(l,W/2,py+pad+ts*1.5+(i+1)*bs*1.4));
+  ctx.font=`${Math.max(10,Math.round(fs*.9))}px ${FONT}`;ctx.fillStyle='#9a7650';
+  ctx.fillText('— chạm để đóng —',W/2,py+PH-pad*.6);
+  ctx.restore();
+  // hai lõi cuộn giấy
+  ctx.save();ctx.globalAlpha=k;ctx.font=`${fs}px ${FONT}`;
+  for(const yy of[py,py+vis]){
+    const gr=ctx.createLinearGradient(0,yy-ch*.7,0,yy+ch*.7);
+    gr.addColorStop(0,'#7a4c24');gr.addColorStop(.5,'#d9b27a');gr.addColorStop(1,'#6a4020');
+    ctx.fillStyle=gr;ctx.fillRect(px-10,yy-ch*.7,PW+20,ch*1.4);
+    ctx.fillStyle='#4e2e12';
+    for(let x=px-6,i=0;x<px+PW+4;x+=cw,i++)ctx.fillText(DIG[i%10],x,yy+fs*.35);
+  }
+  ctx.restore();
+}
+
 /* ---------- vòng lặp ---------- */
 let prev=performance.now(),fpsS=60,fpsT=0;
 function frame(now){
   const dt=Math.min(.05,(now-prev)/1000);prev=now;
   fpsS=fpsS*0.94+(1/Math.max(dt,1e-3))*0.06;
-  const t=(now-start)/1000;
+  const t=(now-start)/1000;tNow=t;
   ctx.globalCompositeOperation='source-over';
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
   ctx.textBaseline='alphabetic';
@@ -419,11 +550,33 @@ function frame(now){
   }
   ctx.globalAlpha=1;
 
-  // pháo hoa (sau cây, trên trời)
+  // sao băng: bấm trúng là gửi điều ước
+  if(!meteor&&t>nextMeteor&&!reduce){
+    const sc=clamp(W/1200,.6,1.3),dir=Math.random()<.5?-1:1;
+    meteor={x:dir<0?rnd(.45,1)*W:rnd(0,.55)*W,y:rnd(.02,.22)*H,vx:dir*rnd(520,760)*sc,vy:rnd(170,260)*sc,age:0,life:rnd(1.2,1.6)};
+  }
+  if(meteor){
+    const m=meteor;m.age+=dt;m.x+=m.vx*dt;m.y+=m.vy*dt;
+    const k=m.age/m.life;
+    if(k>=1){meteor=null;nextMeteor=t+rnd(7,14)}
+    else{
+      const fade=Math.sin(Math.PI*k),tx=m.x-m.vx*.22,ty=m.y-m.vy*.22;
+      ctx.globalCompositeOperation='lighter';
+      const gr=ctx.createLinearGradient(m.x,m.y,tx,ty);
+      gr.addColorStop(0,`rgba(255,250,230,${fade})`);gr.addColorStop(1,'rgba(255,250,230,0)');
+      ctx.strokeStyle=gr;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(m.x,m.y);ctx.lineTo(tx,ty);ctx.stroke();ctx.lineWidth=1;
+      ctx.globalAlpha=fade;ctx.drawImage(glow.white,m.x-12,m.y-12,24,24);
+      ctx.fillStyle='#fff6d8';
+      for(let j=1;j<6;j++){ctx.globalAlpha=fade*(1-j/6)*.8;ctx.fillText(DIG[(j*3+(t*20|0))%10],m.x-m.vx*.04*j-cw/2,m.y-m.vy*.04*j+fs*.35)}
+      ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;
+    }
+  }
+
+  // pháo hoa (sau cây, trên trời); đêm Giáng Sinh bắn dày gấp ba
   if(t>nextFw&&!reduce){
     launch(rnd(.08,.92)*W,rnd(.07,.38)*H);
     if(Math.random()<.35)launch(rnd(.08,.92)*W,rnd(.07,.38)*H);
-    nextFw=t+rnd(.5,1.4);
+    nextFw=t+rnd(.5,1.4)/(xmasNow?3:1);
   }
   ctx.globalCompositeOperation='lighter';
   ctx.lineWidth=1;
@@ -513,26 +666,59 @@ function frame(now){
       const e=easeOut(p);x=o.sx0+(o.x-o.sx0)*e;y=o.sy0+(o.y-o.sy0)*e;
       c=pick(DIG);a=0.35+0.65*p;
     }else if(Math.random()<0.0015&&o.type!=='star'&&o.type!=='rose'){o.ch=c=pick(DIG)}
+    // cây rung khi được chạm: ngọn rung mạnh hơn gốc
+    if(o.u!==undefined&&t-shake<1.6){const e=t-shake;x+=Math.sin(e*30)*cw*.8*Math.exp(-e*3)*(1-o.u*.7)}
+    // nắp và nơ hộp quà bay lên khi mở
+    if(o.lid&&geo.gift.open){
+      const e=t-geo.gift.open;if(e>1.2)continue;
+      const k=easeOut(Math.min(1,e/.8));y-=k*ch*5;x+=(o.x-geo.gift.mx)*k*.6;a*=1-e/1.2;
+    }
     let col=o.col;
     const unlit=(o.type==='orn'||o.type==='light'||o.type==='garland')&&t<o.lightAt;
     if(unlit)col=o.leaf;
     else switch(o.type){
       case 'orn':{const k=0.5+0.5*Math.sin(t*2.2+o.tw);col=`hsl(${o.h},${o.s}%,${o.l-10+k*22}%)`;if(p>=1)glows.push([o.g,x+cw/2,y-fs*.35,ch*2.4,.18+.3*k]);break}
-      case 'light':{const on=Math.sin(t*3+o.tw)>0.1;const m={gold:'#ffd36b',white:'#ffffff',blue:'#7fb8ff',pink:'#ff8fd0',green:'#8dffb0'}[o.g];col=m;a*=on?1:.25;if(on&&p>=1)glows.push([o.g==='green'?'green':o.g,x+cw/2,y-fs*.35,ch*1.8,.35]);break}
+      case 'light':{
+        // 3 kiểu đèn, đổi mỗi lần chạm cây: nhấp nháy ngẫu nhiên, chạy từ trên xuống, đổi màu cầu vồng
+        let on,g=o.g;
+        if(lightMode===1)on=Math.sin(t*7-o.y*.06)>.3;
+        else on=Math.sin(t*3+o.tw)>.1;
+        col={gold:'#ffd36b',white:'#ffffff',blue:'#7fb8ff',pink:'#ff8fd0',green:'#8dffb0'}[o.g];
+        if(lightMode===2){on=true;col=`hsl(${(t*140+o.x*.5+o.y)%360|0},95%,65%)`;g='white'}
+        a*=on?1:.25;if(on&&p>=1)glows.push([g,x+cw/2,y-fs*.35,ch*1.8,.35]);break}
+      case 'bow':{const k=.5+.5*Math.sin(t*4+o.tw);col=`hsl(46,100%,${55+k*25|0}%)`;break}
       case 'garland':{const k=0.5+0.5*Math.sin(t*4-o.y*0.05+o.tw*0.2);col=`hsl(44,95%,${48+k*26}%)`;break}
       case 'snowsp':{const k=Math.pow(0.5+0.5*Math.sin(t*2.5+o.tw),6);col=`hsl(200,60%,${70+k*30}%)`;a*=.5+.5*k;break}
       case 'star':{const k=0.5+0.5*Math.sin(t*3+o.tw);col=`hsl(${46+k*8},100%,${62+k*20}%)`;break}
     }
+    if(o.cap&&p>=1){col='hsl(205,35%,93%)';c=o.capCh} // tuyết đọng trên cành
     if(col!==curCol){ctx.fillStyle=col;curCol=col}
     ctx.globalAlpha=a;
     ctx.fillText(c,x,y);
   }
+  // lá rơi, tuyết rơi khỏi cành, pháo giấy từ hộp quà
+  for(let i=bits.length-1;i>=0;i--){
+    const b=bits[i];b.age+=dt;
+    if(b.age>b.life){bits.splice(i,1);continue}
+    if(b.conf)b.vx*=Math.pow(.4,dt);
+    b.vy+=(b.conf?260:120)*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;
+    const gt=groundTop(b.x)+ch*.6;
+    if(!b.conf&&b.y>gt){b.y=gt;b.vx=0;b.vy=0}
+    ctx.globalAlpha=Math.min(1,(b.life-b.age)/.6);ctx.fillStyle=b.col;ctx.fillText(b.ch,b.x,b.y);
+  }
+  curCol='';
   for(const r of roses)if(t>r.end)rosesOpen++;
   drawSanta();ctx.textAlign='left';
 
   // quầng sáng
   ctx.globalCompositeOperation='lighter';
   for(const g of glows){ctx.globalAlpha=g[4];ctx.drawImage(glow[g[0]],g[1]-g[3]/2,g[2]-g[3]/2,g[3],g[3])}
+  // hộp quà: lấp lánh mời bấm, sau khi mở thì toả sáng từ trong hộp
+  const gf=geo.gift;
+  if(gf&&t>T.gift+1.2){
+    if(gf.open){const k=.45+.25*Math.sin(t*3),R=(gf.x1-gf.x0)*1.5;ctx.globalAlpha=k;ctx.drawImage(glow.gold,gf.mx-R/2,gf.top-R/2,R,R)}
+    else{const k=Math.pow(.5+.5*Math.sin(t*2.5),4),R=(gf.x1-gf.x0)*.9;ctx.globalAlpha=.5*k;ctx.drawImage(glow.gold,gf.mx-R/2,gf.top-ch*1.2-R/2,R,R)}
+  }
   const sp=(t-T.star-.3)/1.2;
   if(sp>0){
     const k=Math.min(1,sp)*(0.75+0.25*Math.sin(t*3));
@@ -554,8 +740,16 @@ function frame(now){
     for(const f of flakes){
       if(!reduce){f.y+=f.v*dt;f.x+=Math.sin(t*f.sw+f.ph)*10*dt}
       if(f.y>H){f.y=-10;f.x=rnd(0,W)}
+      // bông tuyết chạm mép cành thì đọng lại
+      if(t>T.lights){
+        const c=Math.floor(f.x/cw),r=Math.round(f.y/ch-.82);let hit=null;
+        for(const dr of[0,1]){const o=gridMap.get((r+dr)*cols+c);if(o&&o.ledge&&!o.cap){hit=o;break}}
+        if(hit){hit.cap=true;hit.capCh=pick('08*.');f.y=-10;f.x=rnd(0,W);continue}
+      }
       ctx.globalAlpha=f.a*Math.min(1,(t-T.snow)/2);ctx.fillText(f.ch,f.x,f.y);
     }
+    // càng xem lâu cây càng phủ tuyết
+    if(t>T.lights+2&&ledges.length&&!reduce&&Math.random()<dt*1.5){const o=pick(ledges);o.cap=true;o.capCh=pick('08*.')}
   }
 
   // lời chúc
@@ -580,13 +774,36 @@ function frame(now){
     ctx.fillStyle=g2;
     ctx.fillText('Giáng Sinh An Lành',W/2,sy);
     ctx.shadowBlur=0;
+    // đếm ngược
+    const cd=countdown();
+    ctx.font=`${Math.max(10,Math.round(fs*1.05))}px ${FONT}`;
+    ctx.fillStyle=cd.xmas?'#ffd36b':'#e0c48a';ctx.globalAlpha=a;
+    ctx.shadowColor='#000';ctx.shadowBlur=6;
+    ctx.fillText(cd.text,W/2,sy+Math.max(18,sub*.95));
+    ctx.shadowBlur=0;
     ctx.textAlign='left';
   }
+  // lời báo điều ước
+  if(wish){
+    const age=t-wish.t0;
+    if(age>3.5)wish=null;
+    else{
+      const sz=clamp(Math.round(W/24),18,32);
+      ctx.textAlign='center';ctx.font=`700 ${sz}px "Dancing Script",Georgia,serif`;
+      ctx.globalAlpha=Math.min(1,age/.4)*Math.min(1,(3.5-age)/.8);
+      ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=12;ctx.fillStyle='#ffe7a0';
+      ctx.fillText('Điều ước của bạn đã được gửi ✨',W/2,H*.47);
+      ctx.shadowBlur=0;ctx.textAlign='left';
+    }
+  }
+  ctx.globalAlpha=1;
+  if(paper)drawPaper(t);
   ctx.globalAlpha=1;
 
   // HUD
   if(now-fpsT>200){
     fpsT=now;
+    xmasNow=countdown().xmas;
     $('timer').textContent='t '+(t<10?'0':'')+t.toFixed(2)+'s';
     $('iRose').textContent=rosesOpen+'/'+roses.length;
     $('iFw').textContent=fwCount;
@@ -595,8 +812,23 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
-cv.addEventListener('pointerdown',e=>{launch(e.clientX,Math.min(e.clientY,H*0.7))});
-addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R')setup()});
+cv.addEventListener('pointerdown',e=>{
+  const x=e.clientX,y=e.clientY;
+  if(paper){if(tNow-paper.t0>.4&&!paper.close)paper.close=tNow;return}
+  if(hitSanta(x,y)){sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
+  if(hitMeteor(x,y)){sparkleAt(x,y,34,48);wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
+  if(hitGift(x,y)){openGift();return}
+  if(hitTree(x,y)){shakeTree();return}
+  launch(x,Math.min(y,H*0.7));
+});
+cv.addEventListener('pointermove',e=>{
+  const x=e.clientX,y=e.clientY;
+  cv.style.cursor=(paper||hitSanta(x,y)||hitMeteor(x,y)||hitGift(x,y)||hitTree(x,y))?'pointer':'crosshair';
+});
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&paper&&!paper.close)paper.close=tNow;
+  if(e.key==='r'||e.key==='R')setup();
+});
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(setup,200)});
 setup();requestAnimationFrame(frame);
 })();
