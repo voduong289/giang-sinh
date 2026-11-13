@@ -426,16 +426,14 @@ function buildScene(){
       if(o.moonEdge)o.mcol=`hsl(${(o.h+25)|0},38%,${Math.min(68,o.l+18)|0}%)`; // viền ánh trăng
     }
   }
-  // đèn và quả châu hắt màu xuống các ô lá xung quanh
-  const tintHue={red:352,gold:45,blue:212,pink:325,green:140,white:50};
+  // đèn và quả châu làm sáng nhẹ những lá sát bên: lá vẫn xanh, chỉ sáng hơn và hơi ngả ấm
   for(const s of cells){
     if(s.type!=='light'&&s.type!=='orn')continue;
-    const hue=tintHue[s.g]??45;
-    for(let dr=-2;dr<=2;dr++)for(let dc=-3;dc<=3;dc++){
+    for(let dr=-1;dr<=1;dr++)for(let dc=-2;dc<=2;dc++){
       const o=map.get((s.r+dr)*cols+s.c+dc);if(!o||o.type!=='tree')continue;
-      const d=Math.hypot(dc*cw,dr*ch)/ch;if(d>2.3)continue;
+      const d=Math.hypot(dc*cw,dr*ch)/ch;if(d>1.3)continue;
       if(o.tint&&o.tint.d<=d)continue;
-      o.tint={src:s,d,col:`hsl(${hue},${s.type==='orn'?75:65}%,${clamp(o.l+18-d*4,30,62)|0}%)`};
+      o.tint={src:s,d,col:`hsl(${(o.h-12)|0},${Math.min(80,o.s+8)|0}%,${clamp(o.l+14-d*4,28,58)|0}%)`};
     }
   }
   // những thứ in bóng xuống mặt tuyết bóng loáng
