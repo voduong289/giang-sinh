@@ -30,7 +30,7 @@
   color-scheme:dark;
 }
 html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hidden}
-#c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
 .hud{position:fixed;font:12px/1.5 var(--mono);pointer-events:none;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 #timer{top:calc(10px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));color:var(--rose)}
 /* nút loa: cùng kiểu chữ terminal */
@@ -80,9 +80,14 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
   #hint{display:none}
 }
 /* điện thoại: khung phát rộng hết chiều ngang, nút âm thanh nằm ngay dưới, lời chúc dời xuống dưới hai thứ này */
+#pSnd{display:none;font-size:11px!important}
+#pSnd.on{border-color:rgba(156,196,228,.4)!important}
 @media (max-width:640px){
   #player{width:calc(100vw - 32px)}
   #timer{display:none}
+  /* điện thoại: nút âm thanh gộp vào khung nhạc cho gọn */
+  #pSnd{display:inline-block}
+  #snd{display:none!important}
   #snd{top:calc(84px + env(safe-area-inset-top,0px));right:auto;left:max(16px,env(safe-area-inset-left,0px))}
 }
 #info b{color:var(--fg);font-weight:400}
@@ -103,6 +108,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 /* lúc mới vào cả trang tối, chữ góc màn hình hiện sau */
 .hud,.corner{animation:hudIn 1.5s ease 1.5s both}
 @keyframes hudIn{from{opacity:0}}
+/* để yên 10 giây: khung nhạc, chữ góc và thanh dưới mờ đi, chỉ còn cảnh; chạm là hiện lại */
+#player,#snd,.hud,.corner{transition:opacity .5s ease}
+body.idle #player,body.idle #snd,body.idle .hud,body.idle .corner{opacity:0!important;pointer-events:none;transition:opacity 1.4s ease}
 @media (prefers-reduced-motion:reduce){.hud,.corner,#snd,#player{animation:none}.disc.playing{animation-play-state:paused}}
 </style>
 
@@ -120,6 +128,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
     <button type="button" id="pPrev" aria-label="Bài trước">‹</button>
     <button type="button" id="pPlay" aria-label="Phát nhạc">▶</button>
     <button type="button" id="pNext" aria-label="Bài sau">›</button>
+    <button type="button" id="pSnd" aria-label="Bật hoặc tắt âm thanh" aria-pressed="false">🔇</button>
   </div>
   <ul id="pList" role="listbox" aria-label="Chọn bài" hidden></ul>
 </div>
@@ -179,6 +188,72 @@ let clouds=[];
 let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0;
 let wind=0,lastPtr=null,lastShake=-9,motionAsked=false,modeNow=null;
 let skyBg=null,milky=null,moonDim=1,refl=[],uiBottom=0,townGlow=null,vignette=null;
+
+/* ---------- chạm, kéo vẽ tuyết, gợi ý chỗ bấm ---------- */
+let ripples=[],trail=[],drag=null;
+function ripple(x,y,hit){ripples.push({x,y,t0:tNow,hit});if(ripples.length>12)ripples.shift()}
+function drawTrail(x0,y0,x1,y1){
+  const d=Math.hypot(x1-x0,y1-y0),n=Math.max(1,Math.round(d/7));
+  for(let i=1;i<=n;i++){
+    const k=i/n;
+    trail.push({x:x0+(x1-x0)*k+rnd(-3,3),y:y0+(y1-y0)*k+rnd(-3,3),t0:tNow,life:rnd(1.2,2),ch:pick('*.+08'),vx:rnd(-8,8),vy:rnd(4,16),tw:rnd(0,7)});
+  }
+  if(trail.length>420)trail.splice(0,trail.length-420);
+}
+function drawTouchFx(t,dt){
+  if(!ripples.length&&!trail.length)return;
+  ctx.globalCompositeOperation='lighter';ctx.textAlign='center';
+  // vệt bông tuyết lấp lánh tan dần
+  for(let i=trail.length-1;i>=0;i--){
+    const p=trail[i],e=(t-p.t0)/p.life;if(e>=1){trail.splice(i,1);continue}
+    p.x+=p.vx*dt;p.y+=p.vy*dt;
+    const tw=.6+.4*Math.sin(t*10+p.tw);
+    ctx.globalAlpha=(1-e)*tw;ctx.fillStyle=e<.15?'#ffffff':'#cfe4ff';ctx.fillText(p.ch,p.x,p.y);
+    if(e<.25){ctx.globalAlpha=(.25-e)*1.6;ctx.drawImage(glow.white,p.x-6,p.y-10,12,12)}
+  }
+  // vòng sáng tại chỗ chạm: vàng khi trúng vật, xanh băng khi chạm trời
+  ctx.lineWidth=1.5;
+  for(let i=ripples.length-1;i>=0;i--){
+    const r=ripples[i],e=(t-r.t0)/.55;if(e>=1){ripples.splice(i,1);continue}
+    ctx.globalAlpha=(1-e)*.8;ctx.strokeStyle=r.hit?'#ffd98a':'#bcd8f2';
+    ctx.beginPath();ctx.arc(r.x,r.y,6+e*(r.hit?30:22),0,TAU);ctx.stroke();
+  }
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;ctx.textAlign='left';ctx.lineWidth=1;
+}
+// gợi ý cho người mới: sau ~20 giây lần lượt làm loé từng thứ bấm được kèm chữ "chạm thử"
+let triedSet=new Set(),hintQ=null;
+try{triedSet=new Set(JSON.parse(localStorage.getItem('tried')||'[]'))}catch(e){}
+function tried(k){if(triedSet.has(k))return;triedSet.add(k);try{localStorage.setItem('tried',JSON.stringify([...triedSet]))}catch(e){}}
+function hintSpot(k){
+  const g=geo;
+  if(k==='tree')return t=>tNow>T.leaf+2?{x:g.cx,y:g.treeTop+g.TH*.55}:null;
+  if(k==='gift')return()=>{const G=g.gift;return G&&!G.gone&&!G.drop&&!G.open&&tNow>T.gift+1.2?{x:G.mx,y:G.top-ch*1.2}:null};
+  if(k==='snowman')return()=>{const S=g.snowman;return S&&!S.melt&&g.walker&&tNow>g.walker.tb1?{x:S.x,y:(S.top+S.bottom)/2}:null};
+  if(k==='santa')return()=>{const s=santa;return s&&s.x>s.E&&s.x<W-s.E?{x:s.x-s.dir*s.E*1.5,y:s.y-s.E*.3}:null};
+}
+function drawHints(t){
+  if(reduce)return;
+  if(!hintQ){
+    if(t<20)return;
+    hintQ={list:['tree','gift','snowman','santa'].filter(k=>!triedSet.has(k)),i:0,t0:t,wait:0};
+  }
+  const H_=hintQ;if(H_.i>=H_.list.length||paper)return;
+  const k=H_.list[H_.i],spot=hintSpot(k)(t);
+  if(triedSet.has(k)||(!spot&&t-H_.t0>(k==='santa'?40:15))){H_.i++;H_.t0=t;return} // đã thử hoặc chưa xuất hiện: bỏ qua
+  if(!spot)return;
+  const e=(t-H_.t0)/2.6;
+  if(e>=1){H_.i++;H_.t0=t;return}
+  const a=Math.min(1,e*5,(1-e)*4),pulse=.5+.5*Math.sin(t*7);
+  ctx.globalCompositeOperation='lighter';
+  const R=ch*(5+pulse*1.5);ctx.globalAlpha=.45*a;ctx.drawImage(glow.gold,spot.x-R,spot.y-R,R*2,R*2);
+  ctx.globalCompositeOperation='source-over';
+  ctx.textAlign='center';ctx.font=`${Math.max(11,Math.round(fs*1.25))}px ${FONT}`;
+  ctx.globalAlpha=a;ctx.fillStyle='rgba(8,12,28,.7)';
+  const lbl='chạm thử ↓',w=ctx.measureText(lbl).width+12,ly=spot.y-R*.75-pulse*3;
+  ctx.fillRect(spot.x-w/2,ly-ch*1.15,w,ch*1.55);
+  ctx.fillStyle='#ffe9b0';ctx.fillText(lbl,spot.x,ly);
+  ctx.font=`${fs}px ${FONT}`;ctx.textAlign='left';ctx.globalAlpha=1;
+}
 // cực quang: thỉnh thoảng một dải sáng xanh lá – tím uốn lượn chậm trên trời, rất mờ
 let aur={t0:-99,dur:0},nextAur=0;
 function drawAurora(t){
@@ -716,9 +791,10 @@ function setup(){
   fws=[];parts=[];bursts.length=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
+  ripples=[];trail=[];drag=null;hintQ=null;
   storm={t0:-99,dur:0,dir:1};nextStorm=0;stormFlakes=[];sK=0;dog=null;nextCarol=0;carolNotes=[];carolOn=false;pulses.length=0;
   crowd=[];balls=[];nextCrowd=CROWD_TEST?3:T.greet+rnd(1,3);
-  uiBottom=W<=640?$('snd').getBoundingClientRect().bottom:0;
+  uiBottom=W<=640?$('player').getBoundingClientRect().bottom:0;
   try{document.fonts.load('700 40px "Dancing Script"','Giáng Sinh')}catch(e){}
   start=performance.now();
 }
@@ -1748,6 +1824,7 @@ function frame(now){
     ctx.shadowBlur=0;ctx.textAlign='left';
   }
   ctx.globalAlpha=1;
+  drawHints(t);drawTouchFx(t,dt);
   if(paper)drawPaper(t);
   ctx.globalAlpha=1;
 
@@ -1951,6 +2028,8 @@ function setSound(on){
   sndBtn.textContent=on?(AC&&AC.state!=='running'?'♪ chạm để nghe nhạc':'♪ âm thanh: bật'):'♪ bật âm thanh';
   sndBtn.setAttribute('aria-pressed',on?'true':'false');
   sndBtn.classList.toggle('on',on);
+  const ps=$('pSnd');ps.textContent=on?(AC&&AC.state!=='running'?'🔈':'🔊'):'🔇';
+  ps.setAttribute('aria-pressed',on?'true':'false');ps.classList.toggle('on',on);
   updatePlayer();
 }
 // mặc định bật âm thanh ngay khi vào trang (trừ khi người xem đã tự tắt lần trước).
@@ -1969,6 +2048,7 @@ function unlockAudio(){
 }
 for(const ev of['pointerdown','keydown','touchend'])addEventListener(ev,unlockAudio,{capture:true,passive:true});
 sndBtn.addEventListener('click',e=>{e.stopPropagation();if(justUnlocked)return;setSound(!soundOn)});
+$('pSnd').addEventListener('click',e=>{e.stopPropagation();if(justUnlocked)return;setSound(!soundOn)});
 document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend();else if(soundOn)AC.resume()});
 updatePlayer();
 
@@ -1981,25 +2061,49 @@ cv.addEventListener('pointerdown',e=>{
     motionAsked=true;DeviceMotionEvent.requestPermission().catch(()=>{});
   }
   if(paper){if(tNow-paper.t0>.4&&!paper.close)paper.close=tNow;return}
-  if(hitSanta(x,y)){sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
-  if(hitMeteor(x,y)){sparkleAt(x,y,34,48);sfx('wish');wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
-  if(hitGift(x,y)){openGift();return}
-  if(hitSnowman(x,y)){pokeSnowman();return}
-  if(hitTree(x,y)){shakeTree();return}
-  launch(x,Math.min(y,H*0.7));
+  // chạm trúng vật bấm được: vòng sáng vàng và điện thoại rung nhẹ
+  const hit=k=>{ripple(x,y,true);tried(k);try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}};
+  if(hitSanta(x,y)){hit('santa');sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
+  if(hitMeteor(x,y)){hit('meteor');sparkleAt(x,y,34,48);sfx('wish');wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
+  if(hitGift(x,y)){hit('gift');openGift();return}
+  if(hitSnowman(x,y)){hit('snowman');pokeSnowman();return}
+  if(hitTree(x,y)){hit('tree');shakeTree();return}
+  // chạm trời: pháo hoa bắn khi nhấc tay (nếu không kéo); kéo thì vẽ vệt tuyết
+  ripple(x,y,false);
+  drag={x0:x,y0:y,lx:x,ly:y,moved:false};
+  try{cv.setPointerCapture(e.pointerId)}catch(err){}
 });
 cv.addEventListener('pointermove',e=>{
   const x=e.clientX,y=e.clientY,now=performance.now();
   // tốc độ rê ngang tạo gió
   if(lastPtr){const dtm=Math.max(8,now-lastPtr.t);const vx=(x-lastPtr.x)/dtm*1000;wind=clamp(wind*.7+vx*.3,-1600,1600)}
   lastPtr={x,t:now};
+  if(drag){
+    if(!drag.moved&&Math.hypot(x-drag.x0,y-drag.y0)>12)drag.moved=true;
+    if(drag.moved)drawTrail(drag.lx,drag.ly,x,y);
+    drag.lx=x;drag.ly=y;
+  }
   cv.style.cursor=(paper||hitSanta(x,y)||hitMeteor(x,y)||hitGift(x,y)||hitSnowman(x,y)||hitTree(x,y))?'pointer':'crosshair';
 });
+const endDrag=e=>{
+  if(!drag)return;
+  if(!drag.moved&&e.type==='pointerup')launch(drag.x0,Math.min(drag.y0,H*0.7));
+  drag=null;
+};
+cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
 addEventListener('keydown',e=>{
   if(e.key==='Escape'&&paper&&!paper.close)paper.close=tNow;
   if(e.key==='r'||e.key==='R')setup();
 });
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(setup,200)});
+// tự ẩn giao diện khi không ai chạm hay rê chuột trong 10 giây
+let lastInput=performance.now();
+for(const ev of['pointerdown','pointermove','keydown','wheel','touchstart'])
+  addEventListener(ev,()=>{lastInput=performance.now();if(document.body.classList.contains('idle'))document.body.classList.remove('idle')},{capture:true,passive:true});
+setInterval(()=>{
+  const idle=performance.now()-lastInput>10000&&!paper&&pEls.list.hidden&&tNow>T.greet+2;
+  document.body.classList.toggle('idle',idle);
+},500);
 setup();requestAnimationFrame(frame);
 })();
 </script>
