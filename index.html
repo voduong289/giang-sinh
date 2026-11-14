@@ -38,14 +38,54 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 #snd:hover{border-color:#4a5468}
 #snd:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
 #snd.on{color:#8dffb0;border-color:#2f5a40}
-#info{left:max(16px,env(safe-area-inset-left,0px));top:calc(34px + env(safe-area-inset-top,0px));color:var(--dim)}
+#info{left:max(16px,env(safe-area-inset-left,0px));top:calc(86px + env(safe-area-inset-top,0px));color:var(--dim)}
+/* trình phát nhạc: khung trong mờ ở góc trên trái, đĩa than xoay khi đang phát */
+#player{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));z-index:6;
+  width:min(300px,calc(100vw - 32px));box-sizing:border-box;display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:10px;align-items:center;
+  padding:8px 10px;border-radius:12px;background:rgba(14,18,30,.42);border:1px solid rgba(255,255,255,.09);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font:11px/1.35 var(--mono);color:var(--fg);animation:hudIn 1.5s ease 1.5s both}
+.disc{width:46px;height:46px;border-radius:50%;position:relative;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 2px 10px rgba(0,0,0,.6);
+  background:radial-gradient(circle,#000 0 5%,#b3263a 5.5% 17%,#e9c46a 17.5% 19%,transparent 19.5%),
+    repeating-radial-gradient(circle,#141414 0 1.1px,#262626 1.5px 2.3px);
+  animation:spin 3.2s linear infinite;animation-play-state:paused}
+.disc::after{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 20deg,transparent 0 8%,rgba(255,255,255,.2) 12%,transparent 18% 58%,rgba(255,255,255,.12) 62%,transparent 68%)}
+.disc.playing{animation-play-state:running}
+@keyframes spin{to{transform:rotate(360deg)}}
+#player .meta{min-width:0}
+#player .np{color:#56607a;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player .title{display:block;max-width:100%;padding:0;border:0;background:none;color:#ffe7a0;cursor:pointer;text-align:left;
+  font:700 16px/1.2 "Dancing Script",Georgia,serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player .title::after{content:" ▾";font:10px var(--mono);color:#56607a}
+#player .sub{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#player .ctl{display:flex;gap:4px}
+#player .ctl button{width:24px;height:24px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25);
+  color:var(--fg);font:12px/1 var(--mono);cursor:pointer;padding:0}
+#player .ctl button:hover,#player .title:hover{border-color:rgba(255,255,255,.3);color:#fff}
+#player button:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+#pList{position:absolute;top:calc(100% + 6px);left:0;right:0;margin:0;padding:6px;list-style:none;border-radius:10px;
+  background:rgba(14,18,30,.88);border:1px solid rgba(255,255,255,.09);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  max-height:50vh;overflow:auto}
+#pList button{display:grid;grid-template-columns:22px 1fr;gap:6px;width:100%;padding:5px 6px;border:0;border-radius:6px;background:none;
+  color:var(--fg);font:11px/1.35 var(--mono);text-align:left;cursor:pointer}
+#pList button:hover{background:rgba(255,255,255,.06)}
+#pList button[aria-selected="true"]{color:#ffe7a0}
+#pList .i{color:#56607a}
+#pList .s{grid-column:2;color:var(--dim);font-size:10px}
+/* màn hình hẹp: khung phát xuống góc dưới trái để không che lời chúc, danh sách mở lên trên */
+@media (max-width:900px){
+  #player{top:auto;bottom:calc(40px + env(safe-area-inset-bottom,0px));width:min(280px,calc(100vw - 32px))}
+  #pList{top:auto;bottom:calc(100% + 6px)}
+  #hint{display:none}
+  #info{top:calc(10px + env(safe-area-inset-top,0px))}
+}
 #info b{color:var(--fg);font-weight:400}
 #info .row{display:flex;gap:22px;flex-wrap:wrap}
 #bar{left:0;right:0;bottom:0;display:flex;justify-content:space-between;gap:12px;background:var(--bar);border-top:1px solid #1c2230;
   padding:6px max(16px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));color:var(--dim)}
 #bar .run{color:var(--amber)}
 #bar .by{color:#4a5468}
-#hint{top:calc(10px + env(safe-area-inset-top,0px));left:max(16px,env(safe-area-inset-left,0px));color:#3d4555}
+#hint{bottom:calc(38px + env(safe-area-inset-bottom,0px));left:max(16px,env(safe-area-inset-left,0px));color:#3d4555}
 @media (max-width:820px){#hint{display:none}#info{display:none}}
 /* bốn góc khung kiểu cửa sổ terminal */
 .corner{position:fixed;width:18px;height:18px;border:0 solid #2b3445;pointer-events:none}
@@ -57,12 +97,26 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 /* lúc mới vào cả trang tối, chữ góc màn hình hiện sau */
 .hud,.corner{animation:hudIn 1.5s ease 1.5s both}
 @keyframes hudIn{from{opacity:0}}
-@media (prefers-reduced-motion:reduce){.hud,.corner,#snd{animation:none}}
+@media (prefers-reduced-motion:reduce){.hud,.corner,#snd,#player{animation:none}.disc.playing{animation-play-state:paused}}
 </style>
 
 <canvas id="c" aria-label="Cây thông Noel và hoa hồng dựng từ chữ số, pháo hoa trên bầu trời đêm"></canvas>
 <div class="corner" id="k1"></div><div class="corner" id="k2"></div><div class="corner" id="k3"></div><div class="corner" id="k4"></div>
 <div class="hud" id="hint">bấm trời: pháo hoa · chạm cây, hộp quà, sao băng, ông già Noel · rê chuột: gió · R: dựng lại</div>
+<div id="player" role="region" aria-label="Trình phát nhạc">
+  <div class="disc" id="disc" aria-hidden="true"></div>
+  <div class="meta">
+    <div class="np" id="pNp">hộp nhạc · đang dừng</div>
+    <button type="button" class="title" id="pTitle" aria-haspopup="listbox" aria-expanded="false">Jingle Bells</button>
+    <div class="sub" id="pSub">J. Pierpont · 1857</div>
+  </div>
+  <div class="ctl">
+    <button type="button" id="pPrev" aria-label="Bài trước">‹</button>
+    <button type="button" id="pPlay" aria-label="Phát nhạc">▶</button>
+    <button type="button" id="pNext" aria-label="Bài sau">›</button>
+  </div>
+  <ul id="pList" role="listbox" aria-label="Chọn bài" hidden></ul>
+</div>
 <div class="hud" id="timer">t 00.00s</div>
 <button type="button" id="snd" aria-pressed="false">♪ bật âm thanh</button>
 <div class="hud" id="info">
@@ -1187,13 +1241,64 @@ let songI=0,noteI=0,nextNoteT=0,bellNext=0,stagesFired=new Set(),lastTick=-1,pre
 const sndBtn=$('snd');
 const mf=m=>440*Math.pow(2,(m-69)/12);
 // nhạc Giáng Sinh cổ điển (đã hết bản quyền): [nốt MIDI, số phách]
+const up=(a,k=12)=>a.map(([m,d])=>[m+k,d]);
 const SONGS=[
-  {b:.34,n:[[76,1],[76,1],[76,2],[76,1],[76,1],[76,2],[76,1],[79,1],[72,1.5],[74,.5],[76,4],[77,1],[77,1],[77,1.5],[77,.5],[77,1],[76,1],[76,1],[76,.5],[76,.5],[76,1],[74,1],[74,1],[76,1],[74,2],[79,2],
+  {name:'Jingle Bells',sub:'J. Pierpont · 1857',b:.34,n:[[76,1],[76,1],[76,2],[76,1],[76,1],[76,2],[76,1],[79,1],[72,1.5],[74,.5],[76,4],[77,1],[77,1],[77,1.5],[77,.5],[77,1],[76,1],[76,1],[76,.5],[76,.5],[76,1],[74,1],[74,1],[76,1],[74,2],[79,2],
             [76,1],[76,1],[76,2],[76,1],[76,1],[76,2],[76,1],[79,1],[72,1.5],[74,.5],[76,4],[77,1],[77,1],[77,1.5],[77,.5],[77,1],[76,1],[76,1],[76,.5],[76,.5],[79,1],[79,1],[77,1],[74,1],[72,4]]}, // Jingle Bells
-  {b:.52,n:[[79,1.5],[81,.5],[79,1],[76,3],[79,1.5],[81,.5],[79,1],[76,3],[86,2],[86,1],[83,3],[84,2],[84,1],[79,3],[81,2],[81,1],[84,1.5],[83,.5],[81,1],[79,1.5],[81,.5],[79,1],[76,3],
+  {name:'Silent Night',sub:'F. X. Gruber · 1818',b:.52,n:[[79,1.5],[81,.5],[79,1],[76,3],[79,1.5],[81,.5],[79,1],[76,3],[86,2],[86,1],[83,3],[84,2],[84,1],[79,3],[81,2],[81,1],[84,1.5],[83,.5],[81,1],[79,1.5],[81,.5],[79,1],[76,3],
             [81,2],[81,1],[84,1.5],[83,.5],[81,1],[79,1.5],[81,.5],[79,1],[76,3],[86,2],[86,1],[89,1.5],[86,.5],[83,1],[84,3],[88,3],[84,1],[79,1],[76,1],[79,1.5],[77,.5],[74,1],[72,6]]},             // Silent Night
-  {b:.4,n:[[74,1],[79,1],[79,.5],[81,.5],[79,.5],[78,.5],[76,1],[76,1],[76,1],[81,1],[81,.5],[83,.5],[81,.5],[79,.5],[78,1],[74,1],[74,1],[83,1],[83,.5],[84,.5],[83,.5],[81,.5],[79,1],[76,1],[74,.5],[74,.5],[76,1],[81,1],[78,1],[79,3]]} // We Wish You a Merry Christmas
+  {name:'We Wish You a Merry Christmas',sub:'dân ca Anh',b:.4,n:[[74,1],[79,1],[79,.5],[81,.5],[79,.5],[78,.5],[76,1],[76,1],[76,1],[81,1],[81,.5],[83,.5],[81,.5],[79,.5],[78,1],[74,1],[74,1],[83,1],[83,.5],[84,.5],[83,.5],[81,.5],[79,1],[76,1],[74,.5],[74,.5],[76,1],[81,1],[78,1],[79,3]]},
+  {name:'Deck the Halls',sub:'dân ca xứ Wales',b:.32,n:up([[67,1.5],[65,.5],[64,1],[62,1],[60,1],[62,1],[64,1],[60,1],[62,.5],[64,.5],[65,.5],[62,.5],[64,1.5],[62,.5],[60,1],[59,1],[60,2],
+    [67,1.5],[65,.5],[64,1],[62,1],[60,1],[62,1],[64,1],[60,1],[62,.5],[64,.5],[65,.5],[62,.5],[64,1.5],[62,.5],[60,1],[59,1],[60,2],
+    [62,1.5],[64,.5],[65,1],[62,1],[64,1.5],[65,.5],[67,1],[62,1],[64,.5],[66,.5],[67,1],[69,.5],[71,.5],[72,1],[71,1],[69,1],[67,2],
+    [67,1.5],[65,.5],[64,1],[62,1],[60,1],[62,1],[64,1],[60,1],[69,.5],[69,.5],[69,.5],[69,.5],[67,1.5],[65,.5],[64,1],[62,1],[60,2]])},
+  {name:'Joy to the World',sub:'G. F. Handel · L. Mason',b:.36,n:up([[72,2],[71,1.5],[69,.5],[67,3],[65,1],[64,2],[62,2],[60,3],[67,1],[69,3],[69,1],[71,3],[71,1],[72,6],
+    [72,1],[72,1],[71,1],[69,1],[67,1],[67,1.5],[65,.5],[64,1],[72,1],[72,1],[71,1],[69,1],[67,1],[67,1.5],[65,.5],[64,1],
+    [64,1],[64,1],[64,1],[64,.5],[65,.5],[67,3],[65,.5],[64,.5],[62,1],[62,1],[62,1],[62,.5],[64,.5],[65,3],[64,.5],[62,.5],
+    [60,1],[72,2],[69,1],[67,1.5],[65,.5],[64,1],[65,1],[64,2],[62,2],[60,4]])},
+  {name:'O Christmas Tree',sub:'dân ca Đức',b:.44,n:up([[67,1],[72,1.5],[72,.5],[72,2],[74,1],[76,1.5],[76,.5],[76,2],[76,1],[74,1],[76,1],[77,2],[71,1],[74,1],[72,2],
+    [67,1],[72,1.5],[72,.5],[72,2],[74,1],[76,1.5],[76,.5],[76,2],[76,1],[74,1],[76,1],[77,2],[71,1],[74,1],[72,3]])},
+  {name:'Carol of the Bells',sub:'M. Leontovych · 1914',b:.3,n:up([].concat(
+    ...Array(4).fill([[70,1],[69,.5],[70,.5],[67,1]]),...Array(4).fill([[74,1],[72,.5],[74,.5],[70,1]]),
+    ...Array(2).fill([[79,1],[79,.5],[79,.5],[77,.5],[75,.5],[74,1],[74,.5],[74,.5],[72,.5],[70,.5],[72,1],[72,.5],[72,.5],[74,.5],[72,.5],[67,1],[69,.5],[70,.5],[67,1]]),
+    ...Array(4).fill([[70,1],[69,.5],[70,.5],[67,1]])),0)},
+  {name:'Auld Lang Syne',sub:'dân ca Scotland · nhạc Giao Thừa',b:.42,n:up([[60,1],[65,1.5],[65,.5],[65,1],[69,1],[67,1.5],[65,.5],[67,1],[69,1],[65,1.5],[65,.5],[69,1],[72,1],[74,3],
+    [74,1],[72,1.5],[69,.5],[69,1],[65,1],[67,1.5],[65,.5],[67,1],[69,1],[65,1.5],[62,.5],[62,1],[60,1],[65,3]])}
 ];
+let musicOn=true;
+const pEls={disc:$('disc'),np:$('pNp'),title:$('pTitle'),sub:$('pSub'),play:$('pPlay'),list:$('pList')};
+function updatePlayer(){
+  const s=SONGS[songI],playing=soundOn&&musicOn;
+  pEls.title.textContent=s.name;pEls.sub.textContent='♪ '+s.sub;
+  pEls.np.textContent='hộp nhạc · '+(playing?'đang phát':'đang dừng');
+  pEls.play.textContent=playing?'❚❚':'▶';pEls.play.setAttribute('aria-label',playing?'Tạm dừng':'Phát nhạc');
+  pEls.disc.classList.toggle('playing',playing);
+  pEls.list.querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-selected',i===songI?'true':'false'));
+}
+function pickSong(i){
+  songI=(i+SONGS.length)%SONGS.length;noteI=0;
+  if(AC)nextNoteT=AC.currentTime+.25;
+  musicOn=true;if(!soundOn)setSound(true);
+  updatePlayer();
+}
+SONGS.forEach((s,i)=>{
+  const li=document.createElement('li'),b=document.createElement('button');
+  b.type='button';b.setAttribute('role','option');
+  b.innerHTML=`<span class="i">${String(i+1).padStart(2,'0')}</span><span>${s.name}</span><span class="s">${s.sub}</span>`;
+  b.addEventListener('click',()=>{pickSong(i);toggleList(false)});
+  li.appendChild(b);pEls.list.appendChild(li);
+});
+function toggleList(open){pEls.list.hidden=!open;pEls.title.setAttribute('aria-expanded',open?'true':'false')}
+pEls.title.addEventListener('click',()=>toggleList(pEls.list.hidden));
+$('pPrev').addEventListener('click',()=>pickSong(songI-1));
+$('pNext').addEventListener('click',()=>pickSong(songI+1));
+pEls.play.addEventListener('click',()=>{
+  if(soundOn&&musicOn){musicOn=false;updatePlayer();return}
+  musicOn=true;if(AC)nextNoteT=AC.currentTime+.2;
+  if(!soundOn)setSound(true);else updatePlayer();
+});
+// từ 26/12 tới hết 1/1, mở trang là bài Giao Thừa
+if(modeNow&&(modeNow.kind==='ny'||modeNow.kind==='nyday'))songI=SONGS.length-1;
 function audioInit(){
   if(AC)return;
   AC=new (window.AudioContext||window.webkitAudioContext)();
@@ -1257,13 +1362,13 @@ function sleighShake(x){
   for(let i=0;i<4;i++)tone(rnd(2600,4200),n+i*.025+Math.random()*.02,.12,.05,'triangle',o);
 }
 function schedMusic(){
-  if(!soundOn||!AC)return;
+  if(!soundOn||!musicOn||!AC)return;
   if(nextNoteT<AC.currentTime)nextNoteT=AC.currentTime+.1;
   while(nextNoteT<AC.currentTime+.6){
     const s=SONGS[songI],nn=s.n[noteI];
     bell(mf(nn[0]),nextNoteT,.55,musicGain);
     nextNoteT+=nn[1]*s.b;noteI++;
-    if(noteI>=s.n.length){noteI=0;songI=(songI+1)%SONGS.length;nextNoteT+=3}
+    if(noteI>=s.n.length){noteI=0;songI=(songI+1)%SONGS.length;nextNoteT+=3;setTimeout(updatePlayer,3000)}
   }
 }
 setInterval(schedMusic,120);
@@ -1290,15 +1395,18 @@ function setSound(on){
   sndBtn.textContent=on?'♪ âm thanh: bật':'♪ bật âm thanh';
   sndBtn.setAttribute('aria-pressed',on?'true':'false');
   sndBtn.classList.toggle('on',on);
+  updatePlayer();
 }
 let sndPref=false;try{sndPref=localStorage.getItem('snd')==='1'}catch(e){}
 if(sndPref)sndBtn.textContent='♪ chạm để bật âm thanh';
 sndBtn.addEventListener('click',e=>{e.stopPropagation();sndPref=false;setSound(!soundOn)});
 document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend();else if(soundOn)AC.resume()});
+updatePlayer();
 
 cv.addEventListener('pointerdown',e=>{
   const x=e.clientX,y=e.clientY;
   lastPtr={x,t:performance.now()};
+  if(!pEls.list.hidden){toggleList(false);return} // chạm ra ngoài thì đóng danh sách bài
   // lần trước đã bật âm thanh: chạm đầu tiên bật lại (trình duyệt không cho tự phát)
   if(sndPref&&!soundOn){sndPref=false;setSound(true)}
   // iPhone cần xin quyền cảm biến chuyển động từ một lần chạm
