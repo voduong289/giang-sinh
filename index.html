@@ -1084,10 +1084,11 @@ function getMode(){
   }
   if(m===11&&d>=26){
     const ms=new Date(y+1,0,1)-now;
-    return{kind:'ny',title:'Happy New Year',sub:`Chúc Mừng Năm Mới ${y+1}`,text:`còn ${fmt(ms)} nữa là đến Giao Thừa`,dense:ms<60000?3:1,left:ms/1000};
+    return{kind:'ny',title:'Happy New Year',sub:`Chúc Mừng Năm Mới ${y+1}`,text:`còn ${fmt(ms)} nữa là đến Giao Thừa`,textS:`còn ${fmt(ms)} tới Giao Thừa`,dense:ms<60000?3:1,left:ms/1000};
   }
   if(m===11&&(d===24||d===25))return{kind:'xmas',...X,text:'✦ Đêm nay là Giáng Sinh! ✦',dense:3,left:-1};
-  return{kind:'wait',...X,text:`còn ${fmt(new Date(y,11,24)-now)} nữa là đến đêm Giáng Sinh 24/12`,dense:1,left:-1};
+  const left=fmt(new Date(y,11,24)-now);
+  return{kind:'wait',...X,text:`còn ${left} nữa là đến đêm Giáng Sinh 24/12`,textS:`còn ${left} tới 24/12`,dense:1,left:-1};
 }
 modeNow=getMode();
 // lắc điện thoại: cây rung, tuyết trên cành rơi, gió thổi
@@ -1720,7 +1721,8 @@ function frame(now){
     ctx.font=`${Math.max(10,Math.round(fs*1.05))}px ${FONT}`;
     ctx.fillStyle=cd.dense>1?'#ffd36b':'#e0c48a';ctx.globalAlpha=a;
     ctx.shadowColor='#000';ctx.shadowBlur=6;
-    ctx.fillText(cd.text,W/2,sy+Math.max(18,sub*.95));
+    // điện thoại: câu ngắn gọn để không chạy sát mặt trăng
+    ctx.fillText(W<=640&&cd.textS?cd.textS:cd.text,W/2,sy+Math.max(18,sub*.95));
     ctx.shadowBlur=0;
     ctx.textAlign='left';
   }
