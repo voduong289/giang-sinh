@@ -72,12 +72,16 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 #pList button[aria-selected="true"]{color:#ffe7a0}
 #pList .i{color:#56607a}
 #pList .s{grid-column:2;color:var(--dim);font-size:10px}
-/* màn hình hẹp: khung phát xuống góc dưới trái để không che lời chúc, danh sách mở lên trên */
+/* màn hình vừa: khung phát hẹp lại để không chạm lời chúc */
 @media (max-width:900px){
-  #player{top:auto;bottom:calc(40px + env(safe-area-inset-bottom,0px));width:min(280px,calc(100vw - 32px))}
-  #pList{top:auto;bottom:calc(100% + 6px)}
+  #player{width:min(250px,calc(100vw - 32px))}
   #hint{display:none}
-  #info{top:calc(10px + env(safe-area-inset-top,0px))}
+}
+/* điện thoại: khung phát rộng hết chiều ngang, nút âm thanh nằm ngay dưới, lời chúc dời xuống dưới hai thứ này */
+@media (max-width:640px){
+  #player{width:calc(100vw - 32px)}
+  #timer{display:none}
+  #snd{top:calc(84px + env(safe-area-inset-top,0px));right:auto;left:max(16px,env(safe-area-inset-left,0px))}
 }
 #info b{color:var(--fg);font-weight:400}
 #info .row{display:flex;gap:22px;flex-wrap:wrap}
@@ -162,7 +166,7 @@ glow.moon=makeGlow('rgba(255,236,190,1)');
 let clouds=[];
 let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0;
 let wind=0,lastPtr=null,lastShake=-9,motionAsked=false,modeNow=null;
-let skyBg=null,milky=null,moonDim=1,refl=[];
+let skyBg=null,milky=null,moonDim=1,refl=[],uiBottom=0;
 // đèn trên cây có đang sáng không (dùng để hắt màu đèn xuống lá xung quanh)
 function lightOn(s,t){
   if(s.type==='orn')return Math.sin(t*2.2+s.tw)>-.3;
@@ -616,6 +620,7 @@ function setup(){
   fws=[];parts=[];bursts.length=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
+  uiBottom=W<=640?$('snd').getBoundingClientRect().bottom:0;
   try{document.fonts.load('700 40px "Dancing Script"','Giáng Sinh')}catch(e){}
   start=performance.now();
 }
@@ -1152,7 +1157,8 @@ function frame(now){
     const a=Math.min(1,gT);
     const big=clamp(Math.round(Math.min(W/16,H/16)),20,54);
     ctx.textAlign='center';
-    const base=Math.max(big+22,H*0.08);
+    // trên điện thoại lời chúc nằm dưới khung phát nhạc và nút âm thanh
+    const base=Math.max(big+22,H*0.08,uiBottom?uiBottom+8+big*.9:0);
     ctx.font=`700 ${big}px "Dancing Script",Georgia,serif`;
     ctx.globalAlpha=a;
     ctx.shadowColor='rgba(255,190,90,.8)';ctx.shadowBlur=18;
