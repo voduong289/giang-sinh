@@ -31,6 +31,13 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
 .hud{position:fixed;font:12px/1.5 var(--mono);pointer-events:none;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 #timer{top:calc(10px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));color:var(--rose)}
+/* nút loa: cùng kiểu chữ terminal */
+#snd{position:fixed;top:calc(32px + env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));z-index:5;
+  font:12px/1.4 var(--mono);color:var(--amber);background:rgba(11,13,18,.7);border:1px solid #2b3445;border-radius:3px;
+  padding:4px 9px;cursor:pointer;animation:hudIn 1.5s ease 1.5s both}
+#snd:hover{border-color:#4a5468}
+#snd:focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+#snd.on{color:#8dffb0;border-color:#2f5a40}
 #info{left:max(16px,env(safe-area-inset-left,0px));top:calc(34px + env(safe-area-inset-top,0px));color:var(--dim)}
 #info b{color:var(--fg);font-weight:400}
 #info .row{display:flex;gap:22px;flex-wrap:wrap}
@@ -50,13 +57,14 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);overflow:hid
 /* lúc mới vào cả trang tối, chữ góc màn hình hiện sau */
 .hud,.corner{animation:hudIn 1.5s ease 1.5s both}
 @keyframes hudIn{from{opacity:0}}
-@media (prefers-reduced-motion:reduce){.hud,.corner{animation:none}}
+@media (prefers-reduced-motion:reduce){.hud,.corner,#snd{animation:none}}
 </style>
 
 <canvas id="c" aria-label="Cây thông Noel và hoa hồng dựng từ chữ số, pháo hoa trên bầu trời đêm"></canvas>
 <div class="corner" id="k1"></div><div class="corner" id="k2"></div><div class="corner" id="k3"></div><div class="corner" id="k4"></div>
 <div class="hud" id="hint">bấm trời: pháo hoa · chạm cây, hộp quà, sao băng, ông già Noel · rê chuột: gió · R: dựng lại</div>
 <div class="hud" id="timer">t 00.00s</div>
+<button type="button" id="snd" aria-pressed="false">♪ bật âm thanh</button>
 <div class="hud" id="info">
   <div style="color:var(--fg)">@noel.ascii</div>
   <div class="row"><span>hoa hồng nở <b id="iRose">0/0</b></span><span>pháo hoa <b id="iFw">0</b></span></div>
@@ -553,6 +561,7 @@ function setup(){
   buildScene();buildSky();
   fws=[];parts=[];bursts.length=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
+  stagesFired=new Set();lastTick=-1;bellNext=0;
   try{document.fonts.load('700 40px "Dancing Script"','Giáng Sinh')}catch(e){}
   start=performance.now();
 }
@@ -566,9 +575,10 @@ function launch(x,ty){
   const sat=Math.random()<.45?0:rnd(55,95);
   const x0=x+rnd(-.3,.3)*H*0.5,y0=H*rnd(.62,.8);
   fws.push({x0,y0,x:x0,y:y0,tx:x,ty,age:0,dur:rnd(.7,1.1),hue,sat});
+  sfx('launch',x);
 }
 function explode(f){
-  fwCount++;
+  fwCount++;sfx('boom',f.x);
   const sc=clamp(Math.min(W,H)/800,.6,1.5);
   const n=pick([8,10,12,12,16]),rot=rnd(0,TAU),R=rnd(60,120)*sc;
   const rays=[];
@@ -633,11 +643,11 @@ function hitTree(x,y){return tNow>T.leaf+2&&inTree(x,y)}
 function sparkleAt(x,y,n,hue){
   for(let i=0;i<n;i++){const a=rnd(0,TAU),v=rnd(40,150);parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,age:0,life:rnd(.8,1.6),tw:rnd(0,7),sz:rnd(2,4),hue,sat:90})}
 }
-function openPaper(m,delay=0){paper={m,t0:tNow+delay,close:0,grid:null}}
+function openPaper(m,delay=0){paper={m,t0:tNow+delay,close:0,grid:null};setTimeout(()=>sfx('paper'),delay*1000)}
 function openGift(){
   const g=geo.gift;
   if(!g.open){
-    g.open=tNow;
+    g.open=tNow;sfx('pop',g.mx);
     for(let i=0;i<70;i++){
       const a=rnd(-Math.PI*.95,-Math.PI*.05),v=rnd(120,320);
       bits.push({x:g.mx,y:g.top,vx:Math.cos(a)*v,vy:Math.sin(a)*v,ch:pick(DIG),col:`hsl(${pick([0,45,120,200,320,280])},90%,65%)`,age:0,life:rnd(1.6,2.6),conf:1});
@@ -646,7 +656,7 @@ function openGift(){
   }else openPaper(MSG.gift);
 }
 function shakeTree(){
-  shake=tNow;lightMode=(lightMode+1)%3;
+  shake=tNow;lightMode=(lightMode+1)%3;sfx('chime',geo.cx);
   const tc=cells.filter(o=>o.u!==undefined&&o.type!=='star'&&tNow>o.end);
   for(let i=0;i<14&&tc.length;i++){const o=pick(tc);bits.push({x:o.x,y:o.y,vx:rnd(-30,30),vy:rnd(-20,20),ch:pick(DIG),col:o.col,age:0,life:rnd(1.8,2.8)})}
   for(const o of ledges)if(o.cap&&Math.random()<.7){
@@ -772,6 +782,7 @@ function frame(now){
   if(!meteor&&t>nextMeteor&&!reduce){
     const sc=clamp(W/1200,.6,1.3),dir=Math.random()<.5?-1:1;
     meteor={x:dir<0?rnd(.45,1)*W:rnd(0,.55)*W,y:rnd(.02,.22)*H,vx:dir*rnd(520,760)*sc,vy:rnd(170,260)*sc,age:0,life:rnd(1.2,1.6)};
+    sfx('meteor',meteor.x);
   }
   if(meteor){
     const m=meteor;m.age+=dt;m.x+=m.vx*dt;m.y+=m.vy*dt;
@@ -1028,7 +1039,7 @@ function frame(now){
   const sp=(t-T.star-.3)/1.2;
   if(sp>0){
     const k=Math.min(1,sp),pulse=.82+.18*Math.sin(t*3),sx=geo.sx,sy=geo.sy,SR=geo.SR;
-    if(!geo.starPopped&&t>T.star+.6){geo.starPopped=1;sparkleAt(sx,sy,44,48)}
+    if(!geo.starPopped&&t>T.star+.6){geo.starPopped=1;sparkleAt(sx,sy,44,48);sfx('star')}
     let R=SR*6.5*pulse;ctx.globalAlpha=.6*k;ctx.drawImage(glow.gold,sx-R/2,sy-R/2,R,R);
     R=SR*2.4;ctx.globalAlpha=.55*k*pulse;ctx.drawImage(glow.white,sx-R/2,sy-R/2,R,R);
     ctx.lineWidth=1.2;
@@ -1156,6 +1167,8 @@ function frame(now){
   if(paper)drawPaper(t);
   ctx.globalAlpha=1;
 
+  soundFrame(t);
+
   // HUD
   if(now-fpsT>200){
     fpsT=now;
@@ -1168,16 +1181,133 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
+/* ---------- âm thanh: tự tạo bằng Web Audio, không dùng file nhạc ---------- */
+let AC=null,master=null,musicGain=null,sfxGain=null,noiseBuf=null,windGain=null,windFilter=null,soundOn=false;
+let songI=0,noteI=0,nextNoteT=0,bellNext=0,stagesFired=new Set(),lastTick=-1,prevKind='';
+const sndBtn=$('snd');
+const mf=m=>440*Math.pow(2,(m-69)/12);
+// nhạc Giáng Sinh cổ điển (đã hết bản quyền): [nốt MIDI, số phách]
+const SONGS=[
+  {b:.34,n:[[76,1],[76,1],[76,2],[76,1],[76,1],[76,2],[76,1],[79,1],[72,1.5],[74,.5],[76,4],[77,1],[77,1],[77,1.5],[77,.5],[77,1],[76,1],[76,1],[76,.5],[76,.5],[76,1],[74,1],[74,1],[76,1],[74,2],[79,2],
+            [76,1],[76,1],[76,2],[76,1],[76,1],[76,2],[76,1],[79,1],[72,1.5],[74,.5],[76,4],[77,1],[77,1],[77,1.5],[77,.5],[77,1],[76,1],[76,1],[76,.5],[76,.5],[79,1],[79,1],[77,1],[74,1],[72,4]]}, // Jingle Bells
+  {b:.52,n:[[79,1.5],[81,.5],[79,1],[76,3],[79,1.5],[81,.5],[79,1],[76,3],[86,2],[86,1],[83,3],[84,2],[84,1],[79,3],[81,2],[81,1],[84,1.5],[83,.5],[81,1],[79,1.5],[81,.5],[79,1],[76,3],
+            [81,2],[81,1],[84,1.5],[83,.5],[81,1],[79,1.5],[81,.5],[79,1],[76,3],[86,2],[86,1],[89,1.5],[86,.5],[83,1],[84,3],[88,3],[84,1],[79,1],[76,1],[79,1.5],[77,.5],[74,1],[72,6]]},             // Silent Night
+  {b:.4,n:[[74,1],[79,1],[79,.5],[81,.5],[79,.5],[78,.5],[76,1],[76,1],[76,1],[81,1],[81,.5],[83,.5],[81,.5],[79,.5],[78,1],[74,1],[74,1],[83,1],[83,.5],[84,.5],[83,.5],[81,.5],[79,1],[76,1],[74,.5],[74,.5],[76,1],[81,1],[78,1],[79,3]]} // We Wish You a Merry Christmas
+];
+function audioInit(){
+  if(AC)return;
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  master=AC.createGain();master.gain.value=0;master.connect(AC.destination);
+  // tiếng vang nhẹ cho hộp nhạc và chuông
+  const dl=AC.createDelay(1),fb=AC.createGain(),wet=AC.createGain();
+  dl.delayTime.value=.24;fb.gain.value=.3;wet.gain.value=.22;
+  dl.connect(fb);fb.connect(dl);dl.connect(wet);wet.connect(master);
+  musicGain=AC.createGain();musicGain.gain.value=.16;musicGain.connect(master);musicGain.connect(dl);
+  sfxGain=AC.createGain();sfxGain.gain.value=.5;sfxGain.connect(master);sfxGain.connect(dl);
+  noiseBuf=AC.createBuffer(1,AC.sampleRate*2,AC.sampleRate);
+  const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  // tiếng gió đêm rất khẽ, mạnh lên khi có gió
+  const src=AC.createBufferSource();src.buffer=noiseBuf;src.loop=true;
+  windFilter=AC.createBiquadFilter();windFilter.type='lowpass';windFilter.frequency.value=420;
+  windGain=AC.createGain();windGain.gain.value=.025;
+  src.connect(windFilter);windFilter.connect(windGain);windGain.connect(master);src.start();
+}
+function out(x){
+  if(x===undefined||!AC.createStereoPanner)return sfxGain;
+  const p=AC.createStereoPanner();p.pan.value=clamp(x/W*2-1,-1,1)*.6;p.connect(sfxGain);return p;
+}
+function tone(f,t0,dur,vol,type='sine',dest=sfxGain,f1){
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.setValueAtTime(f,t0);
+  if(f1)o.frequency.exponentialRampToValueAtTime(f1,t0+dur);
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+.005);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  o.connect(g);g.connect(dest);o.start(t0);o.stop(t0+dur+.05);
+}
+function bell(f,t0,vol,dest=sfxGain){tone(f,t0,1.6,vol,'sine',dest);tone(f*2,t0,.9,vol*.35,'sine',dest);tone(f*3.01,t0,.45,vol*.14,'sine',dest)}
+function noise(t0,dur,{type='bandpass',f0=1000,f1=f0,q=1,vol=.1,dest=sfxGain}={}){
+  const s=AC.createBufferSource(),fl=AC.createBiquadFilter(),g=AC.createGain();
+  s.buffer=noiseBuf;fl.type=type;fl.Q.value=q;fl.frequency.setValueAtTime(f0,t0);fl.frequency.exponentialRampToValueAtTime(f1,t0+dur);
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+Math.min(.02,dur*.2));g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
+  s.connect(fl);fl.connect(g);g.connect(dest);s.start(t0,Math.random());s.stop(t0+dur+.05);
+}
+// các tiếng động; tất cả đều im khi chưa bật âm thanh
+function sfx(name,x){
+  if(!soundOn||!AC)return;
+  const n=AC.currentTime,o=out(x);
+  switch(name){
+    case 'launch':noise(n,.7,{f0:400,f1:2400,q:2,vol:.05,dest:o});break;                       // pháo bay lên
+    case 'boom':                                                                                  // pháo nổ và lách tách
+      tone(110,n,.45,.22,'sine',o,38);noise(n,.6,{type:'lowpass',f0:900,f1:120,vol:.16,dest:o});
+      for(let i=0;i<10;i++)noise(n+.35+Math.random()*1.1,.04,{type:'highpass',f0:3500,vol:.035,dest:o});
+      break;
+    case 'meteor':noise(n,.8,{type:'highpass',f0:6000,f1:1400,vol:.035,dest:o});break;           // sao băng
+    case 'wish':[84,88,91,96].forEach((m,i)=>bell(mf(m),n+i*.09,.18));break;                     // gửi điều ước
+    case 'pop':tone(650,n,.14,.25,'sine',o,180);noise(n,.06,{f0:2500,vol:.08,dest:o});break;     // mở hộp quà
+    case 'paper':noise(n,.45,{f0:2600,q:.7,vol:.04,dest:o});bell(mf(88),n+.25,.14);break;       // tờ giấy cuộn mở
+    case 'chime':for(let i=0;i<6;i++)bell(mf(pick([84,86,88,91,93,96])),n+i*.07+Math.random()*.03,.1,o);break; // chạm cây
+    case 'star':[84,91,96].forEach(m=>bell(mf(m),n,.16));bell(mf(100),n+.15,.1);break;           // ngôi sao sáng
+    case 'note':bell(mf(x),n,.13);break;                                                          // nốt khi cảnh mọc
+    case 'tick':tone(1500,n,.05,.12,'square');break;                                              // đếm ngược Giao Thừa
+    case 'midnight':for(let i=0;i<8;i++)[72,79,84].forEach(m=>bell(mf(m+(i%2?0:12)),n+i*.5,.16));break;
+  }
+}
+// tiếng chuông xe tuần lộc: từng chùm leng keng nhỏ
+function sleighShake(x){
+  if(!soundOn||!AC)return;
+  const n=AC.currentTime,o=out(x);
+  for(let i=0;i<4;i++)tone(rnd(2600,4200),n+i*.025+Math.random()*.02,.12,.05,'triangle',o);
+}
+function schedMusic(){
+  if(!soundOn||!AC)return;
+  if(nextNoteT<AC.currentTime)nextNoteT=AC.currentTime+.1;
+  while(nextNoteT<AC.currentTime+.6){
+    const s=SONGS[songI],nn=s.n[noteI];
+    bell(mf(nn[0]),nextNoteT,.55,musicGain);
+    nextNoteT+=nn[1]*s.b;noteI++;
+    if(noteI>=s.n.length){noteI=0;songI=(songI+1)%SONGS.length;nextNoteT+=3}
+  }
+}
+setInterval(schedMusic,120);
+// âm thanh gắn với khung hình: nốt khi cảnh mọc, chuông xe Noel, gió, đếm ngược Giao Thừa
+function soundFrame(t){
+  if(!soundOn||!AC)return;
+  for(const[k,m]of[['snow',72],['trunk',76],['leaf',79],['lights',84],['rose',88],['gift',91]])
+    if(t>T[k]&&!stagesFired.has(k)){stagesFired.add(k);sfx('note',m)}
+  if(santa&&t>bellNext&&santa.x<W&&santa.x>-santa.E*3){bellNext=t+.2;sleighShake(santa.x)}
+  windGain.gain.setTargetAtTime(.022+Math.min(.09,Math.abs(wind)/9000),AC.currentTime,.25);
+  windFilter.frequency.setTargetAtTime(380+Math.min(900,Math.abs(wind)*.6),AC.currentTime,.3);
+  if(modeNow.kind==='ny'&&modeNow.left<=10&&modeNow.left>0){const s=Math.ceil(modeNow.left);if(s!==lastTick){lastTick=s;sfx('tick')}}
+  if(prevKind==='ny'&&modeNow.kind==='nyday')sfx('midnight');
+  prevKind=modeNow.kind;
+}
+function setSound(on){
+  soundOn=on;
+  try{localStorage.setItem('snd',on?'1':'0')}catch(e){}
+  if(on){
+    audioInit();AC.resume();nextNoteT=AC.currentTime+.3;
+    master.gain.setTargetAtTime(.8,AC.currentTime,.15);
+    for(const k of Object.keys(T))if(tNow>T[k])stagesFired.add(k); // không phát lại nốt của cảnh đã mọc
+  }else if(AC)master.gain.setTargetAtTime(0,AC.currentTime,.1);
+  sndBtn.textContent=on?'♪ âm thanh: bật':'♪ bật âm thanh';
+  sndBtn.setAttribute('aria-pressed',on?'true':'false');
+  sndBtn.classList.toggle('on',on);
+}
+let sndPref=false;try{sndPref=localStorage.getItem('snd')==='1'}catch(e){}
+if(sndPref)sndBtn.textContent='♪ chạm để bật âm thanh';
+sndBtn.addEventListener('click',e=>{e.stopPropagation();sndPref=false;setSound(!soundOn)});
+document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidden)AC.suspend();else if(soundOn)AC.resume()});
+
 cv.addEventListener('pointerdown',e=>{
   const x=e.clientX,y=e.clientY;
   lastPtr={x,t:performance.now()};
+  // lần trước đã bật âm thanh: chạm đầu tiên bật lại (trình duyệt không cho tự phát)
+  if(sndPref&&!soundOn){sndPref=false;setSound(true)}
   // iPhone cần xin quyền cảm biến chuyển động từ một lần chạm
   if(!motionAsked&&typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
     motionAsked=true;DeviceMotionEvent.requestPermission().catch(()=>{});
   }
   if(paper){if(tNow-paper.t0>.4&&!paper.close)paper.close=tNow;return}
   if(hitSanta(x,y)){sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
-  if(hitMeteor(x,y)){sparkleAt(x,y,34,48);wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
+  if(hitMeteor(x,y)){sparkleAt(x,y,34,48);sfx('wish');wish={t0:tNow};meteor=null;nextMeteor=tNow+rnd(7,14);return}
   if(hitGift(x,y)){openGift();return}
   if(hitTree(x,y)){shakeTree();return}
   launch(x,Math.min(y,H*0.7));
