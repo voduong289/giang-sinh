@@ -435,7 +435,7 @@ function buildScene(){
     const sp=clamp(W/12,45,110),start=-cw*3,stand=Math.max(cw*2,sxm-r1-cw*3.5);
     const t0=T.walkIn,t1=t0+(stand-start)/sp,tb0=t1+.4,tb1=tb0+3.4,t2=tb1+1.6;
     g.snowman={x:sxm,x0:sxm-r1-cw*4,x1:sxm+r1+cw*4,bottom:gb,top:c3-r3-ch*1.8,c2,
-      acc:0,poke:-9,pokes:[],melt:0,rebuild:0,doze:0,nextDoze:0,lastZ:0};
+      acc:0,poke:-9,pokes:[],melt:0,rebuild:0,doze:0,nextDoze:0,lastZ:0,autoMelt:0,hitT:-9,throwT:-9,nextThrow:0,face:1};
     g.walker={start,stand,sp,t0,t1,tb0,tb1,t2,t3:t2+(stand-start)/sp+.5};
     const topY=c3-r3-ch*1.8;
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
@@ -667,14 +667,16 @@ function pokeSnowman(){
   s.say={txt:n===4?'Ui da, nhột quá!':n===5?'Tan mất bây giờ!':pick(SAY),t0:t};
   sfx('poke',s.x);
 }
-function meltSnowman(){
+function meltSnowman(auto){
   const s=geo.snowman,wk=geo.walker,t=tNow;
-  s.melt=t;s.pokes=[];s.say={txt:'Ôi... tan mất rồi!',t0:t};s.doze=0;
+  s.melt=t;s.pokes=[];s.say={txt:auto?'Nóng quá... tan mất!':'Ôi... tan mất rồi!',t0:t};s.doze=0;
+  // lần nào cũng là một người khác tới đắp lại
+  const h=pick(HATS);wk.hat=h[0];wk.hatC=h[1];wk.coat=pick(COATS);
   sfx('melt',s.x);
   // vài giây sau bạn nhỏ quay lại đắp lại từ đầu
   const travel=(wk.stand-wk.start)/wk.sp,t0=t+4.5,t1=t0+travel,tb0=t1+.4,tb1=tb0+3.4,t2=tb1+1.6,shift=tb0-wk.tb0;
   Object.assign(wk,{t0,t1,tb0,tb1,t2,t3:t2+travel+.5,lastF:-1});
-  s.rebuild=tb0;
+  s.rebuild=tb0;s.autoMelt=tb1+rnd(18,22);
   for(const o of cells)if(o.type==='snowman'){o.cap=false;o.d2=o.delay+shift}
 }
 function smUpdate(t,dt){
@@ -684,12 +686,28 @@ function smUpdate(t,dt){
     for(const o of cells)if(o.type==='snowman'){o.delay=o.d2;o.end=o.delay+o.dur}
   }
   if(!s.nextDoze)s.nextDoze=geo.walker.t3+rnd(25,40);
+  // khoảng 20 giây sau khi đắp xong thì người tuyết tự tan, rồi có người tới đắp lại
+  const wk=geo.walker;
+  if(!s.autoMelt)s.autoMelt=wk.tb1+rnd(18,22);
+  if(!s.melt&&!reduce&&t>s.autoMelt&&t>wk.t3)meltSnowman(true);
+  // tham gia trận ném tuyết đang diễn ra
+  if(!s.melt&&t>wk.tb1&&t>s.nextThrow){
+    const foes=crowd.filter(q=>q.fight&&q.state==='fight');
+    if(foes.length){
+      const q=pick(foes),face=q.x<s.x?-1:1;
+      s.throwT=t;s.face=face;
+      throwBall({x:s.x+face*cw*4,face},q,t,s.c2-ch*.6);
+      if(Math.random()<.3)s.say={txt:pick(['Đỡ này!','Hehe!','Ăn tuyết nè!']),t0:t};
+    }
+    s.nextThrow=t+rnd(1.6,3.2);
+  }
   // thỉnh thoảng ngủ gật vài giây
   if(!s.melt&&!s.doze&&t>s.nextDoze&&t-s.poke>5&&!smVis()){s.doze=t;s.nextDoze=t+rnd(40,70)}
   if(s.doze&&(t-s.doze>8||smVis()))s.doze=0;
   // mắt: vui khi được chạm, ngước nhìn ông già Noel, ngủ gật, giật mình khi pháo nổ
   s.eyeDx=0;s.eyeDy=0;
-  if(t-s.poke<2.2)s.eye='^';
+  if(t-s.hitT<.7)s.eye='O';
+  else if(t-s.poke<2.2)s.eye='^';
   else if(smVis()){s.eye='o';s.eyeDy=-ch*.18;s.eyeDx=(santa.x<s.x?-1:1)*cw*.18}
   else if(s.doze)s.eye='-';
   else if(t-lastBoom<.45)s.eye='O';
@@ -709,6 +727,7 @@ function smLook(o,t,x,y,c,col,a){
     return[x,y,c,col,a];
   }
   if(o.part==='eye'){c=s.eye;x+=s.eyeDx;y+=s.eyeDy}
+  else if(o.part==='arm'&&t-s.throwT<.35&&o.side===s.face){y-=o.k*ch*.45;x-=o.side*o.k*cw*.3;c='|'} // vung tay ném
   else if(o.part==='arm'&&o.side===1&&s.wave===1){y-=o.k*ch*.45;x-=o.k*cw*.3;c='|'}
   return[x,y,c,col,a];
 }
@@ -766,21 +785,24 @@ function spawnCrowd(t,walkOnly){
     for(let i=0;i<n;i++)crowd.push(person(dir>0?-E-i*cw*rnd(2.5,5):W+E+i*cw*rnd(2.5,5),dir,{sp:base*rnd(.96,1.04)}));
   }
 }
-function throwBall(p,q,t){
-  p.throwT=t;
-  const x0=p.x+p.face*cw*1.2,y0=groundTop(p.x)+ch*.55-ch*2.6,hit=Math.random()<.7;
-  const tx=hit?q.x:q.x+(Math.random()<.5?-1:1)*rnd(2,6)*cw,ty=hit?groundTop(q.x)+ch*.55-ch*1.6:groundTop(tx)+ch*.5;
+function throwBall(p,q,t,y0o){
+  p.throwT=t;if(p.state)p.face=q.x<p.x?-1:1;
+  const sm=q===geo.snowman;
+  const x0=p.x+p.face*cw*1.2,y0=y0o??groundTop(p.x)+ch*.55-ch*2.6,hit=Math.random()<.7;
+  const tx=hit?q.x:q.x+(Math.random()<.5?-1:1)*rnd(2,6)*cw,ty=hit?(sm?q.c2:groundTop(q.x)+ch*.55-ch*1.6):groundTop(tx)+ch*.5;
   const dx=Math.abs(tx-x0);
   balls.push({x0,y0,tx,ty,t0:t,dur:clamp(dx/(W*.55),.6,1.3),hgt:clamp(dx*.22,ch*3,H*.12),q:hit?q:null});
   sfx('throw',x0);
 }
 function drawPerson(p,t){
-  const moving=p.state!=='fight',f=Math.floor((t+p.ph)/.2)%2,feet=groundTop(p.x)+ch*.55,bob=moving&&f?-1:0;
+  const moving=p.state==='walk'||p.state==='leave',f=Math.floor((t+p.ph)/.2)%2,feet=groundTop(p.x)+ch*.55,bob=moving&&f?-1:0;
   const hit=t-p.hitT<.6,thr=t-p.throwT<.3,windup=!moving&&p.nextThrow>t&&p.nextThrow-t<.4;
   let arms='/|\\',head='o',x=p.x;
   if(hit){arms='\\|/';head='O';x+=Math.sin((t-p.hitT)*40)*cw*.15}
   else if(thr)arms=p.face>0?'\\|-':'-|/';
   else if(windup)arms=p.face>0?'\\|_':'_|/';
+  else if(p.state==='opening')arms='-|-';
+  else if(p.state==='cheer')arms=f?'\\|/':'_|_';
   else if(!moving)arms='/|\\';
   const legs=moving?(f?'/ \\':' | '):'/ \\';
   if(moving&&f!==p.lastF){
@@ -792,26 +814,39 @@ function drawPerson(p,t){
 }
 function drawCrowd(t,dt){
   if(reduce)return;
-  const wk=geo.walker;
-  if(!crowd.length&&!balls.length){
+  // hộp quà nằm đó 10 giây không ai mở: một người chạy ra mở giùm
+  const G=geo.gift;
+  if(G&&G.landT&&G.n===0&&!G.open&&!G.gone&&!G.drop&&!paper&&t-G.landT>10){
+    G.landT=0;
+    crowd.push(person(W+cw*4,-1,{runner:1,sp:clamp(W/5,100,240),stand:Math.min(W-cw*2,G.x1+cw*1.4)}));
+  }
+  if(!crowd.some(p=>!p.runner)&&!balls.length){
     if(nextCrowd===Infinity)nextCrowd=t+rnd(3,7);
     else if(t>nextCrowd){spawnCrowd(t);nextCrowd=Infinity}
   }
   // trong lúc đang ném tuyết, thỉnh thoảng có thêm người đi ngang xem
-  else if(t>T.greet&&!crowd.some(p=>!p.fight)&&Math.random()<dt*.15)spawnCrowd(t,true);
+  else if(t>T.greet&&!crowd.some(p=>!p.fight&&!p.runner)&&Math.random()<dt*.15)spawnCrowd(t,true);
   ctx.textAlign='left';
   for(let i=crowd.length-1;i>=0;i--){
     const p=crowd[i];
     if(p.state==='walk'){
       p.x+=p.dir*p.sp*dt;
+      if(p.runner&&p.x<=p.stand){p.x=p.stand;p.state='opening';p.st=t}
       if(p.fight&&(p.dir>0?p.x>=p.stand:p.x<=p.stand)){p.x=p.stand;p.state='fight';p.face=p.side?-1:1;p.nextThrow=t+rnd(.5,1.8)}
     }else if(p.state==='fight'){
       if(t>p.end&&t-p.throwT>.4){p.state='leave';p.dir=p.face=p.side?1:-1}
       else if(t>p.nextThrow){
         const foes=crowd.filter(q=>q.fight&&q.side!==p.side&&q.state==='fight');
-        if(foes.length)throwBall(p,pick(foes),t);
+        const S=geo.snowman;
+        // thỉnh thoảng ném "trả đũa" người tuyết
+        if(S&&!S.melt&&t>geo.walker.tb1&&Math.random()<.3)throwBall(p,S,t);
+        else if(foes.length)throwBall(p,pick(foes),t);
         p.nextThrow=t+rnd(1.1,2.4);
       }
+    }else if(p.state==='opening'){
+      if(t-p.st>.5){if(!G.open&&!G.gone&&!G.drop&&!paper)openGift(true);p.state='cheer';p.st=t}
+    }else if(p.state==='cheer'){
+      if(t-p.st>2){p.state='leave';p.dir=p.face=1;p.sp*=.5}
     }else p.x+=p.dir*p.sp*1.15*dt;
     const gone=p.dir>0?p.x>W+cw*8:p.x<-cw*8;
     if(gone&&(p.state==='leave'||!p.fight)){crowd.splice(i,1);continue}
@@ -822,7 +857,7 @@ function drawCrowd(t,dt){
     const b=balls[i],u=(t-b.t0)/b.dur;
     if(u>=1){
       balls.splice(i,1);
-      if(b.q)b.q.hitT=t;
+      if(b.q){b.q.hitT=t;if(b.q===geo.snowman&&!b.q.melt&&Math.random()<.4)b.q.say={txt:pick(['Á!','Ui!','Lạnh quá!']),t0:t}}
       for(let k=0;k<9;k++)bits.push({x:b.tx,y:b.ty,vx:rnd(-70,70),vy:rnd(-110,-30),ch:pick('*.0'),col:'hsl(205,40%,94%)',age:0,life:rnd(.5,1)});
       sfx('splat',b.tx);continue;
     }
@@ -901,8 +936,8 @@ function segDist(px,py,ax,ay,bx,by){
 }
 function hitSanta(x,y){
   const s=santa;if(!s)return false;
-  const E=s.E,yy=s.y+Math.sin(tNow*2.4)*E*.25;
-  return x>s.x-E*.2&&x<s.x+E*3.4&&y>yy-E*1.3&&y<yy+E*.4;
+  const E=s.E,yy=s.y+Math.sin(tNow*2.4)*E*.25,a=s.x+s.dir*E*.2,b=s.x-s.dir*E*3.4;
+  return x>Math.min(a,b)&&x<Math.max(a,b)&&y>yy-E*1.6&&y<yy+E*.7;
 }
 function hitGift(x,y){const g=geo.gift;return g&&tNow>T.gift+1.2&&!g.gone&&!g.drop&&x>g.x0&&x<g.x1&&y>g.y0&&y<g.y1+ch*.5}
 function hitMeteor(x,y){const m=meteor;return !!m&&segDist(x,y,m.x,m.y,m.x-m.vx*.22,m.y-m.vy*.22)<40}
@@ -911,7 +946,7 @@ function sparkleAt(x,y,n,hue){
   for(let i=0;i<n;i++){const a=rnd(0,TAU),v=rnd(40,150);parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,age:0,life:rnd(.8,1.6),tw:rnd(0,7),sz:rnd(2,4),hue,sat:90})}
 }
 function openPaper(m,delay=0){paper={m,t0:tNow+delay,close:0,grid:null};setTimeout(()=>sfx('paper'),delay*1000)}
-function openGift(){
+function openGift(auto){
   const g=geo.gift;
   if(!g.open){
     g.open=tNow;sfx('pop',g.mx);
@@ -920,6 +955,7 @@ function openGift(){
       bits.push({x:g.mx,y:g.top,vx:Math.cos(a)*v,vy:Math.sin(a)*v,ch:pick(DIG),col:`hsl(${pick([0,45,120,200,320,280])},90%,65%)`,age:0,life:rnd(1.6,2.6),conf:1});
     }
     openPaper(g.msg,.8);
+    if(auto)paper.auto=tNow+.8+rnd(6,8); // người khác mở giùm: lời chúc tự tắt sau vài giây
   }else openPaper(g.msg);
 }
 // màu hộp quà: [màu giấy gói (hue, độ đậm)], [màu nơ (hue, độ đậm, độ sáng hoặc null = giữ)]
@@ -947,9 +983,13 @@ function giftUpdate(t,dt){
   if(G.gone){
     if(!santa&&!G.called&&G.n>=0){G.called=1;nextSanta=Math.min(nextSanta,t+rnd(4,8))}
     const s=santa;
-    if(s&&s.x+s.E*2.5<G.mx&&s.x+s.E*2.5>G.mx-s.E*2){
+    const sx=s?s.x-s.dir*s.E*2.5:0; // vị trí xe trượt
+    if(s&&(s.dir<0?sx<G.mx&&sx>G.mx-s.E*2:sx>G.mx&&sx<G.mx+s.E*2)){
       G.gone=0;G.open=0;G.drop=t;G.n++;
-      G.pi=G.n%GPAL.length;G.msg=G.n?MSG.wishes[(G.n-1)%MSG.wishes.length]:MSG.gift;
+      // màu và lời chúc bắt đầu ngẫu nhiên, sau đó mỗi hộp một kiểu khác
+      if(G.n===0){G.p0=Math.floor(Math.random()*GPAL.length);G.m0=Math.floor(Math.random()*(MSG.wishes.length+1))}
+      const pool=[MSG.gift,...MSG.wishes];
+      G.pi=(G.p0+G.n)%GPAL.length;G.msg=pool[(G.m0+G.n)%pool.length];
       G.dropH=Math.max(ch*6,G.y1-(s.y+s.E*.4));G.dropDur=clamp(Math.sqrt(G.dropH)/15,.9,1.6);
       for(const o of cells)if(o.type==='gift'||o.type==='bow')o.cap=false;
       sfx('drop',G.mx);
@@ -959,7 +999,7 @@ function giftUpdate(t,dt){
     const k=(t-G.drop)/G.dropDur;
     if(Math.random()<dt*30&&k<1)bits.push({x:G.mx+rnd(-1,1)*cw*2,y:G.y1-(1-k*k)*G.dropH-ch*3,vx:rnd(-20,20),vy:rnd(-30,0),ch:pick('*.'),col:'#ffe7a0',age:0,life:rnd(.4,.8),conf:1});
     if(k>=1){
-      G.drop=0;
+      G.drop=0;G.landT=t;
       for(const o of G.under)o.hideAt=o.hide0;
       for(let i=0;i<16;i++)bits.push({x:G.mx+rnd(-1,1)*G.w*.6,y:G.y1,vx:rnd(-90,90),vy:rnd(-120,-30),ch:pick('*.0'),col:'hsl(205,40%,94%)',age:0,life:rnd(.5,1)});
       sparkleAt(G.mx,G.top,22,48);sfx('splat',G.mx);
@@ -978,6 +1018,7 @@ function shakeTree(){
 // tờ giấy: nền dệt bằng chữ số, cuộn mở từ trên xuống, chữ viết tay
 function drawPaper(t){
   const P=paper,age=t-P.t0;if(age<0)return;
+  if(P.auto&&t>P.auto&&!P.close)P.close=t;
   let k=easeOut(clamp(age/.7,0,1));
   if(P.close){const e=(t-P.close)/.35;if(e>=1){paper=null;return}k*=1-e}
   const PW=Math.min(W-32,540),pad=Math.max(22,PW*.08);
@@ -1169,13 +1210,18 @@ function frame(now){
   // ông già Noel bay qua (vẽ sau cảnh, phía trước cây)
   const drawSanta=()=>{
   if(!santa&&t>nextSanta&&!reduce){
-    const E=clamp(Math.round(Math.min(W,H)*.045),22,44);
-    santa={x:W+E,y:rnd(.3,.44)*H,v:clamp(W/9,90,190),E,trail:[]};
+    // bay ngẫu nhiên: phải sang trái, trái sang phải, hoặc chao chéo từ trên cao xuống
+    const E=clamp(Math.round(Math.min(W,H)*.045),22,44),v=clamp(W/9,90,190);
+    const dir=Math.random()<.5?-1:1,diag=Math.random()<.4;
+    const y0=diag?rnd(.02,.1)*H:rnd(.3,.44)*H;
+    const vy=diag?Math.min(v*.45,(H*rnd(.38,.48)-y0)/((W+E*5)/v)):0;
+    santa={x:dir<0?W+E:-E*.3,y:y0,v,vy,dir,E,trail:[]};
   }
   if(santa){
-    const s=santa,E=s.E;s.x-=s.v*dt;
+    const s=santa,E=s.E,D=s.dir;s.x+=D*s.v*dt;s.y+=s.vy*dt;
     const y=s.y+Math.sin(t*2.4)*E*.25;
-    if(s.x>-E*4)for(let j=0;j<2;j++)s.trail.push({x:s.x+E*3.3+rnd(0,6),y:y-E*.3+rnd(-E*.25,E*.25),age:0,life:rnd(.8,1.8),tw:rnd(0,7)});
+    const onScr=D<0?s.x>-E*4:s.x<W+E*4;
+    if(onScr)for(let j=0;j<2;j++)s.trail.push({x:s.x-D*(E*3.3+rnd(0,6)),y:y-E*.3+rnd(-E*.25,E*.25),age:0,life:rnd(.8,1.8),tw:rnd(0,7)});
     ctx.globalCompositeOperation='lighter';ctx.fillStyle='#ffe7a0';
     for(let j=s.trail.length-1;j>=0;j--){
       const q=s.trail[j];q.age+=dt;q.y+=6*dt;
@@ -1183,16 +1229,19 @@ function frame(now){
       const k=1-q.age/q.life,tw=.5+.5*Math.sin(t*12+q.tw),z=1.5+2*tw;
       ctx.globalAlpha=k*(.3+.7*tw);ctx.fillRect(q.x-z,q.y-.5,z*2,1);ctx.fillRect(q.x-.5,q.y-z,1,z*2);
     }
-    ctx.globalAlpha=.55;ctx.drawImage(glow.red,s.x-E*.05,y-E*.75,E*.7,E*.7);
+    // vẽ trong khung riêng: lật ngang khi bay sang phải, nghiêng mũi xuống khi bay chéo
+    ctx.save();ctx.translate(s.x,y);ctx.rotate(D*Math.atan2(s.vy,s.v));if(D>0)ctx.scale(-1,1);
+    ctx.globalAlpha=.55;ctx.drawImage(glow.red,-E*.05,-E*.75,E*.7,E*.7);
     ctx.globalCompositeOperation='source-over';
     ctx.globalAlpha=.8;ctx.strokeStyle='#d9b45a';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(s.x+E*.6,y-E*.45);ctx.quadraticCurveTo(s.x+E*1.6,y-E*.1,s.x+E*2.6,y-E*.55);ctx.stroke();
-    ctx.globalAlpha=1;
+    ctx.beginPath();ctx.moveTo(E*.6,-E*.45);ctx.quadraticCurveTo(E*1.6,-E*.1,E*2.6,-E*.55);ctx.stroke();
+    ctx.globalAlpha=1;ctx.textAlign='left';
     ctx.font=`${E}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
-    ctx.fillText('🦌',s.x,y);ctx.fillText('🦌',s.x+E*1.1,y+E*.06);
-    ctx.fillText('🎅',s.x+E*2.35,y-E*.3);ctx.fillText('🛷',s.x+E*2.2,y+E*.15);
+    ctx.fillText('🦌',0,0);ctx.fillText('🦌',E*1.1,E*.06);
+    ctx.fillText('🎅',E*2.35,-E*.3);ctx.fillText('🛷',E*2.2,E*.15);
+    ctx.restore();
     ctx.font=`${fs}px ${FONT}`;
-    if(s.x<-E*4&&!s.trail.length){santa=null;nextSanta=t+rnd(16,28)}
+    if(!onScr&&!s.trail.length){santa=null;nextSanta=t+rnd(16,28)}
   }
   };
 
@@ -1346,7 +1395,7 @@ function frame(now){
     else{wx=wk.stand-(t-wk.t2)*wk.sp;ph='walk'}
     const f=Math.floor(t/.2)%2,feet=groundTop(wx)+ch*.55,bob=ph==='walk'&&f?-1:0;
     const arms=ph==='build'?(f?'\\|/':'-|-'):ph==='wave'?(f?'\\|_':'_|_'):'/|\\';
-    const fig=[['^','#e5484d'],['o','#f2c79b'],[arms,'#4a8ff0'],[ph==='walk'?(f?'/ \\':' | '):'/ \\','#8a95b0']];
+    const fig=[[wk.hat||'^',wk.hatC||'#e5484d'],['o','#f2c79b'],[arms,wk.coat||'#4a8ff0'],[ph==='walk'?(f?'/ \\':' | '):'/ \\','#8a95b0']];
     // mỗi bước chân để lại một dấu trên tuyết
     if(ph==='walk'&&f!==wk.lastF){wk.lastF=f;geo.prints.push({x:wx+(f?cw*.35:-cw*.35),y:groundTop(wx)+ch*.85,t0:t})}
     ctx.globalAlpha=1;
