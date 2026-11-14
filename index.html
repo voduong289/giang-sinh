@@ -177,6 +177,41 @@ let clouds=[];
 let gridMap=new Map(),ledges=[],paper=null,meteor=null,nextMeteor=0,wish=null,shake=-9,lightMode=0,bits=[],tNow=0;
 let wind=0,lastPtr=null,lastShake=-9,motionAsked=false,modeNow=null;
 let skyBg=null,milky=null,moonDim=1,refl=[],uiBottom=0;
+const QS=new URLSearchParams(location.search);
+
+/* ---------- trận tuyết lớn: gió mạnh, tuyết dày, mọi người chạy về ---------- */
+let storm={t0:-99,dur:0,dir:1},nextStorm=0,stormFlakes=[],sK=0;
+const STORM_TEST=QS.get('storm');
+function stormLevel(t){
+  const e=t-storm.t0;if(e<0||e>storm.dur)return 0;
+  return Math.min(1,e/2.5,(storm.dur-e)/2.5);
+}
+function updateStorm(t,dt){
+  if(reduce){sK=0;return}
+  if(!nextStorm)nextStorm=STORM_TEST?T.greet+4:T.walkIn+rnd(35,55);
+  if(t>nextStorm&&!sK){storm={t0:t,dur:rnd(9,13),dir:Math.random()<.5?-1:1};nextStorm=t+storm.dur+rnd(60,100)}
+  sK=stormLevel(t);
+  if(sK>0)wind+=(storm.dir*1400*sK-wind)*Math.min(1,dt*2);
+}
+function drawStorm(t,dt){
+  const want=Math.round(W/2.5*sK);
+  while(stormFlakes.length<want)stormFlakes.push({x:rnd(-W*.2,W*1.2),y:rnd(-H,H),v:rnd(160,320),h:rnd(.7,1.3),ch:pick('*.-·'),a:rnd(.3,.85)});
+  if(stormFlakes.length>want)stormFlakes.length=want;
+  if(!stormFlakes.length)return;
+  ctx.fillStyle='#fff';
+  for(const f of stormFlakes){
+    f.y+=f.v*dt;f.x+=storm.dir*f.v*1.6*f.h*dt;
+    if(f.y>H){f.y=rnd(-40,-5);f.x=rnd(-W*.2,W*1.2)}
+    if(f.x<-W*.25)f.x=W*1.2;else if(f.x>W*1.25)f.x=-W*.2;
+    ctx.globalAlpha=f.a*sK;ctx.fillText(f.ch,f.x,f.y);
+  }
+  // màn trắng mờ của bão tuyết
+  ctx.globalAlpha=.16*sK;ctx.fillStyle='#dfe8ff';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+}
+
+/* ---------- đèn trên cây nháy theo nhịp nhạc ---------- */
+let musicSync=false;const beat=[-9,-9,-9,-9],pulses=[];
+let carolOn=false;
 // đèn trên cây có đang sáng không (dùng để hắt màu đèn xuống lá xung quanh)
 function lightOn(s,t){
   if(s.type==='orn')return Math.sin(t*2.2+s.tw)>-.3;
@@ -601,8 +636,7 @@ function buildSky(){
   flakes.sort((a,b)=>a.L-b.L);
   // nền trời: đen ở đỉnh, ngả xanh than rất nhẹ về chân trời
   skyBg=ctx.createLinearGradient(0,0,0,H);
-  skyBg.addColorStop(0,'#000002');skyBg.addColorStop(.55,'#02040c');skyBg.addColorStop(.86,'#081128');skyBg.addColorStop(1,'#050a1a');
-  // dải Ngân Hà bằng chấm và chữ số li ti, vẽ sẵn một lần
+  skyBg.addColorStop(0,'#000002');skyBg.addColorStop(.55,'#02040c');skyBg.addColorStop(.86,'#081128');skyBg.addColorStop(1,'#050a1a');  // dải Ngân Hà bằng chấm và chữ số li ti, vẽ sẵn một lần
   milky=document.createElement('canvas');milky.width=Math.round(W*dpr);milky.height=Math.round(H*dpr);
   const m=milky.getContext('2d');m.setTransform(dpr,0,0,dpr,0,0);
   const ax=-W*.05,ay=H*.04,bx=W*1.05,by=H*.58,len=Math.hypot(bx-ax,by-ay),ux=(bx-ax)/len,uy=(by-ay)/len,nx=-uy,ny=ux;
@@ -634,6 +668,7 @@ function setup(){
   fws=[];parts=[];bursts.length=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
+  storm={t0:-99,dur:0,dir:1};nextStorm=0;stormFlakes=[];sK=0;dog=null;nextCarol=0;carolNotes=[];carolOn=false;pulses.length=0;
   crowd=[];balls=[];nextCrowd=CROWD_TEST?3:T.greet+rnd(1,3);
   uiBottom=W<=640?$('snd').getBoundingClientRect().bottom:0;
   try{document.fonts.load('700 40px "Dancing Script"','Giáng Sinh')}catch(e){}
@@ -707,6 +742,7 @@ function smUpdate(t,dt){
   // mắt: vui khi được chạm, ngước nhìn ông già Noel, ngủ gật, giật mình khi pháo nổ
   s.eyeDx=0;s.eyeDy=0;
   if(t-s.hitT<.7)s.eye='O';
+  else if(sK>.3)s.eye='-'; // nheo mắt trong bão tuyết
   else if(t-s.poke<2.2)s.eye='^';
   else if(smVis()){s.eye='o';s.eyeDy=-ch*.18;s.eyeDx=(santa.x<s.x?-1:1)*cw*.18}
   else if(s.doze)s.eye='-';
@@ -785,6 +821,66 @@ function spawnCrowd(t,walkOnly){
     for(let i=0;i<n;i++)crowd.push(person(dir>0?-E-i*cw*rnd(2.5,5):W+E+i*cw*rnd(2.5,5),dir,{sp:base*rnd(.96,1.04)}));
   }
 }
+// nhóm hát mừng (?carol=1 để xem thử ngay)
+let nextCarol=0,carolNotes=[];
+const CAROL_TEST=QS.get('carol');
+function spawnCarol(t){
+  const n=3+(Math.random()<.5?1:0),from=Math.random()<.5?-1:1,gap=cw*5,sp=clamp(W/12,45,110)*.9;
+  const x0=geo.cx-gap*(n-1)/2;let far=0;
+  for(let i=0;i<n;i++){
+    const stand=x0+gap*i,start=from<0?-cw*4-(n-1-i)*gap:W+cw*4+i*gap;
+    far=Math.max(far,Math.abs(stand-start)/sp);
+    crowd.push(person(start,-from,{carol:1,stand,sp,exit:from}));
+  }
+  const end=t+far+rnd(13,16);
+  for(const p of crowd)if(p.carol&&!p.end)p.end=end;
+}
+
+/* ---------- chú chó con chạy lăng xăng ---------- */
+let dog=null;
+function dogPick(t){
+  const d=dog,S=geo.snowman,r=cw*9;
+  const roll=Math.random(),walkers=crowd.filter(p=>!p.fight&&!p.fled&&(p.state==='walk'||p.state==='sing'));
+  if(roll<.35&&S&&!S.melt){d.mode='circle';d.legs=4;d.tx=S.x+(d.x<S.x?r:-r)}
+  else if(roll<.65&&walkers.length){d.mode='follow';d.who=pick(walkers);d.until=t+rnd(5,8)}
+  else{d.mode='go';d.tx=rnd(.06,.94)*W}
+}
+function bark(t){dog.barkT=t;sfx('bark',dog.x)}
+function drawDog(t,dt){
+  if(reduce||t<T.greet+3)return;
+  if(!dog)dog={x:-cw*6,tx:W*.3,dir:1,mode:'go',until:0,barkT:-9,sitT:0};
+  const d=dog,run=clamp(W/6,80,200);
+  // chọn việc tiếp theo
+  if(sK>.25){if(d.mode!=='hide'){d.mode='hide';d.tx=geo.cx-cw*6}}
+  else if(d.mode==='hide')d.mode='sit',d.sitT=t+1;
+  if(balls.length&&d.mode!=='ball'&&d.mode!=='hide'){d.mode='ball';d.ball=balls[balls.length-1];d.tx=d.ball.tx}
+  if(d.mode==='follow'){
+    const w=d.who;
+    if(!crowd.includes(w)||t>d.until||w.x<0||w.x>W)d.mode='sit',d.sitT=t+rnd(.8,1.6);
+    else d.tx=w.x-(w.state==='sing'?cw*3:w.dir*cw*4);
+  }
+  let moving=false;
+  if(d.mode==='sit'){if(t>d.sitT)dogPick(t)}
+  else{
+    const dx=d.tx-d.x,sp=d.mode==='follow'?run*.8:run;
+    if(Math.abs(dx)>cw*.6){d.dir=Math.sign(dx);d.x+=d.dir*Math.min(Math.abs(dx),sp*dt);moving=true}
+    else if(d.mode==='circle'&&d.legs>1){d.legs--;const S=geo.snowman;d.tx=S.x+(d.x<S.x?cw*9:-cw*9)}
+    else if(d.mode==='ball'){if(!balls.includes(d.ball)){bark(t);d.mode='sit';d.sitT=t+rnd(1,2)}}
+    else if(d.mode==='hide'){}
+    else if(d.mode!=='follow'){if(Math.random()<.4)bark(t);d.mode='sit';d.sitT=t+rnd(1,3)}
+  }
+  // vẽ: thân và đầu ở hàng trên, chân ở hàng dưới; lật theo hướng chạy
+  const f=Math.floor(t/.12)%2,feet=groundTop(d.x)+ch*.55,hop=d.mode==='ball'&&!moving?-Math.abs(Math.sin(t*9))*ch*.5:0;
+  const shiver=d.mode==='hide'&&sK>0?Math.sin(t*60)*.8:0;
+  let body=(moving||Math.sin(t*14)>0?'~':'-')+'==o',legs=moving?(f?'/  \\':' /\\ '):' ,,';
+  if(d.dir<0){const flip=s=>[...s].reverse().map(c=>c==='/'?'\\':c==='\\'?'/':c).join('');body=flip(body);legs=flip(legs)}
+  ctx.globalAlpha=1;ctx.textAlign='left';
+  const x=d.x-2*cw+shiver;
+  ctx.fillStyle='#d39a5c';ctx.fillText(body,x,feet-ch+hop);
+  ctx.fillStyle='#a8743f';ctx.fillText(legs,x,feet+hop);
+  if(t-d.barkT<.9){ctx.globalAlpha=1-(t-d.barkT)/.9;ctx.fillStyle='#ffe9b0';ctx.textAlign='center';ctx.fillText('gâu!',d.x+d.dir*cw*2,feet-ch*2.4-(t-d.barkT)*ch);ctx.textAlign='left';ctx.globalAlpha=1}
+}
+
 function throwBall(p,q,t,y0o){
   p.throwT=t;if(p.state)p.face=q.x<p.x?-1:1;
   const sm=q===geo.snowman;
@@ -801,6 +897,8 @@ function drawPerson(p,t){
   if(hit){arms='\\|/';head='O';x+=Math.sin((t-p.hitT)*40)*cw*.15}
   else if(thr)arms=p.face>0?'\\|-':'-|/';
   else if(windup)arms=p.face>0?'\\|_':'_|/';
+  else if(p.fled)arms='\\|/';
+  else if(p.state==='sing'){arms='[|]';head=Math.floor(t*2.5+p.ph*3)%2?'O':'o'}
   else if(p.state==='opening')arms='-|-';
   else if(p.state==='cheer')arms=f?'\\|/':'_|_';
   else if(!moving)arms='/|\\';
@@ -820,18 +918,27 @@ function drawCrowd(t,dt){
     G.landT=0;
     crowd.push(person(W+cw*4,-1,{runner:1,sp:clamp(W/5,100,240),stand:Math.min(W-cw*2,G.x1+cw*1.4)}));
   }
-  if(!crowd.some(p=>!p.runner)&&!balls.length){
+  // nhóm hát mừng: thỉnh thoảng 3–4 người đứng thành hàng trước cây
+  if(!nextCarol)nextCarol=CAROL_TEST?T.greet+2:T.walkIn+rnd(20,35);
+  if(!sK&&t>nextCarol&&!crowd.some(p=>p.fight||p.carol)){spawnCarol(t);nextCarol=Infinity}
+  if(sK>0){}
+  else if(!crowd.some(p=>!p.runner)&&!balls.length){
     if(nextCrowd===Infinity)nextCrowd=t+rnd(3,7);
     else if(t>nextCrowd){spawnCrowd(t);nextCrowd=Infinity}
   }
   // trong lúc đang ném tuyết, thỉnh thoảng có thêm người đi ngang xem
-  else if(t>T.greet&&!crowd.some(p=>!p.fight&&!p.runner)&&Math.random()<dt*.15)spawnCrowd(t,true);
+  else if(t>T.greet&&!crowd.some(p=>!p.fight&&!p.runner&&!p.carol)&&crowd.some(p=>p.fight)&&Math.random()<dt*.15)spawnCrowd(t,true);
   ctx.textAlign='left';
   for(let i=crowd.length-1;i>=0;i--){
     const p=crowd[i];
+    // bão tuyết: ai cũng che đầu chạy về
+    if(sK>.25&&!p.fled&&p.state!=='opening'){
+      p.fled=1;p.state='leave';p.dir=p.face=p.x<W/2?-1:1;p.sp=Math.max(p.sp,clamp(W/6,90,200));
+    }
     if(p.state==='walk'){
       p.x+=p.dir*p.sp*dt;
       if(p.runner&&p.x<=p.stand){p.x=p.stand;p.state='opening';p.st=t}
+      if(p.carol&&(p.dir>0?p.x>=p.stand:p.x<=p.stand)){p.x=p.stand;p.state='sing'}
       if(p.fight&&(p.dir>0?p.x>=p.stand:p.x<=p.stand)){p.x=p.stand;p.state='fight';p.face=p.side?-1:1;p.nextThrow=t+rnd(.5,1.8)}
     }else if(p.state==='fight'){
       if(t>p.end&&t-p.throwT>.4){p.state='leave';p.dir=p.face=p.side?1:-1}
@@ -847,11 +954,29 @@ function drawCrowd(t,dt){
       if(t-p.st>.5){if(!G.open&&!G.gone&&!G.drop&&!paper)openGift(true);p.state='cheer';p.st=t}
     }else if(p.state==='cheer'){
       if(t-p.st>2){p.state='leave';p.dir=p.face=1;p.sp*=.5}
+    }else if(p.state==='sing'){
+      if(t>p.end){p.state='leave';p.dir=p.face=p.exit}
+      else if(Math.random()<dt*1.1)carolNotes.push({x:p.x+rnd(-cw,cw),y:groundTop(p.x)-ch*3.6,t0:t,ch:pick('♪♫♪'),dx:rnd(-14,14)});
     }else p.x+=p.dir*p.sp*1.15*dt;
     const gone=p.dir>0?p.x>W+cw*8:p.x<-cw*8;
-    if(gone&&(p.state==='leave'||!p.fight)){crowd.splice(i,1);continue}
+    if(gone&&(p.state==='leave'||(!p.fight&&!p.carol&&!p.runner))){crowd.splice(i,1);continue}
     drawPerson(p,t);
   }
+  const wasCarol=carolOn;
+  carolOn=crowd.some(p=>p.carol&&p.state==='sing');
+  if(wasCarol&&!carolOn&&nextCarol===Infinity)nextCarol=t+rnd(45,75);
+  if(nextCarol===Infinity&&!crowd.some(p=>p.carol))nextCarol=t+rnd(45,75);
+  // nốt nhạc bay lên từ nhóm hát
+  if(carolNotes.length){
+    ctx.font=`${Math.round(fs*1.5)}px ${FONT}`;ctx.fillStyle='#ffd98a';
+    for(let i=carolNotes.length-1;i>=0;i--){
+      const n=carolNotes[i],e=t-n.t0;if(e>2.6){carolNotes.splice(i,1);continue}
+      ctx.globalAlpha=Math.min(1,e*3)*(1-e/2.6);
+      ctx.fillText(n.ch,n.x+Math.sin(e*3+n.dx)*cw*.6+n.dx*e,n.y-e*ch*2.2);
+    }
+    ctx.font=`${fs}px ${FONT}`;ctx.globalAlpha=1;
+  }
+  drawDog(t,dt);
   // quả cầu tuyết bay theo đường vòng cung, vỡ tung khi trúng
   for(let i=balls.length-1;i>=0;i--){
     const b=balls[i],u=(t-b.t0)/b.dur;
@@ -1070,6 +1195,9 @@ function frame(now){
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
   // trời ngả xanh than và Ngân Hà hiện dần cùng các vì sao
   const sk=clamp((t-T.stars)/4,0,1);
+  // nhạc đang phát: đèn trên cây nhận nhịp từng nốt
+  musicSync=live()&&musicOn;
+  while(pulses.length&&pulses[0].at<=t){beat[pulses[0].g]=t;pulses.shift()}
   if(sk>0){
     ctx.globalAlpha=sk;ctx.fillStyle=skyBg;ctx.fillRect(0,0,W,H);
     ctx.drawImage(milky,0,0,W,H);ctx.globalAlpha=1;
@@ -1247,6 +1375,7 @@ function frame(now){
 
   // gió từ cú vuốt / rê chuột, tắt dần
   wind*=Math.pow(.25,dt);
+  updateStorm(t,dt);
   const lean=reduce?0:clamp(wind/700,-1,1)*cw*1.6;
 
   // cảnh chữ số
@@ -1296,6 +1425,12 @@ function frame(now){
         else on=Math.sin(t*3+o.tw)>.1;
         col={gold:'#ffd36b',white:'#ffffff',blue:'#7fb8ff',pink:'#ff8fd0',green:'#8dffb0'}[o.g];
         if(lightMode===2){on=true;col=`hsl(${(t*140+o.x*.5+o.y)%360|0},95%,65%)`;g='white'}
+        // có nhạc: mỗi nốt làm một nhóm đèn bừng sáng rồi tắt dần theo nhịp
+        if(musicSync&&t>o.lightAt){
+          if(o.grp===undefined)o.grp=Math.random()*4|0;
+          const pk=Math.max(0,1-(t-beat[o.grp])/.35);on=pk>0;
+          if(on){a*=.55+.45*pk;if(p>=1)glows.push([g,x+cw/2,y-fs*.35,ch*(1.6+pk*1.8),.18+.4*pk]);break}
+        }
         a*=on?1:.25;if(on&&p>=1)glows.push([g,x+cw/2,y-fs*.35,ch*1.8,.35]);break}
       case 'bow':{
         const k=.5+.5*Math.sin(t*4+o.tw),R=GPAL[geo.gift.pi].r;
@@ -1469,7 +1604,10 @@ function frame(now){
     }
     ctx.font=`${fs}px ${FONT}`;
     // càng xem lâu cây càng phủ tuyết
-    if(t>T.lights+2&&ledges.length&&!reduce&&Math.random()<dt*.5){const o=pick(ledges);if(t>o.end+2){o.cap=true;o.capCh=pick('08*.')}}
+    // bão tuyết làm tuyết đọng dày nhanh hơn trên cây, hộp quà và người tuyết
+    for(let n=sK>0?4:1;n>0;n--)
+      if(t>T.lights+2&&ledges.length&&!reduce&&Math.random()<dt*(.5+sK*14)){const o=pick(ledges);if(t>o.end+2){o.cap=true;o.capCh=pick('08*.')}}
+    drawStorm(t,dt);
   }
 
   // lời chúc
@@ -1653,6 +1791,24 @@ function tone(f,t0,dur,vol,type='sine',dest=sfxGain,f1){
   g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(vol,t0+.005);g.gain.exponentialRampToValueAtTime(.0001,t0+dur);
   o.connect(g);g.connect(dest);o.start(t0);o.stop(t0+dur+.05);
 }
+// tiếng hát đồng ca "aah": 3 giọng lệch nhau, rung nhẹ, lọc qua các formant nguyên âm A
+function choir(f,t0,dur){
+  const g=AC.createGain(),end=t0+Math.max(.2,dur)+.2;
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(1.1,t0+.09);
+  g.gain.setValueAtTime(1.1,t0+Math.max(.1,dur*.85));g.gain.linearRampToValueAtTime(0,end);
+  g.connect(musicGain);
+  const src=AC.createGain();src.gain.value=.5;
+  for(const [fq,q,v] of[[730,6,1],[1090,8,.55],[2440,10,.3]]){
+    const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=fq;bp.Q.value=q;
+    const vg=AC.createGain();vg.gain.value=v;src.connect(bp);bp.connect(vg);vg.connect(g);
+  }
+  const lfo=AC.createOscillator(),lg=AC.createGain();lfo.frequency.value=5.2;lg.gain.value=14;lfo.connect(lg);
+  for(const [mul,det] of[[.5,-9],[.5,8],[.25,0]]){
+    const o=AC.createOscillator();o.type='sawtooth';o.frequency.value=f*mul;o.detune.value=det;lg.connect(o.detune);
+    o.connect(src);o.start(t0);o.stop(end+.05);
+  }
+  lfo.start(t0);lfo.stop(end+.05);
+}
 function bell(f,t0,vol,dest=sfxGain){tone(f,t0,1.6,vol,'sine',dest);tone(f*2,t0,.9,vol*.35,'sine',dest);tone(f*3.01,t0,.45,vol*.14,'sine',dest)}
 function noise(t0,dur,{type='bandpass',f0=1000,f1=f0,q=1,vol=.1,dest=sfxGain}={}){
   const s=AC.createBufferSource(),fl=AC.createBiquadFilter(),g=AC.createGain();
@@ -1676,6 +1832,7 @@ function sfx(name,x){
     case 'paper':noise(n,.45,{f0:2600,q:.7,vol:.04,dest:o});bell(mf(88),n+.25,.14);break;       // tờ giấy cuộn mở
     case 'chime':for(let i=0;i<6;i++)bell(mf(pick([84,86,88,91,93,96])),n+i*.07+Math.random()*.03,.1,o);break; // chạm cây
     case 'star':[84,91,96].forEach(m=>bell(mf(m),n,.16));bell(mf(100),n+.15,.1);break;           // ngôi sao sáng
+    case 'bark':tone(560,n,.09,.16,'square',o,300);tone(500,n+.14,.08,.12,'square',o,280);break;   // chó sủa
     case 'drop':tone(1400,n,1,.05,'sine',o,500);bell(mf(91),n,.1,o);break;                       // quà rơi từ xe Noel
     case 'poke':bell(mf(pick([88,91,93])),n,.12,o);bell(mf(96),n+.08,.08,o);break;                // chọc người tuyết
     case 'melt':tone(620,n,1.4,.1,'sine',o,140);noise(n,1.2,{f0:700,f1:200,vol:.04,dest:o});break; // người tuyết tan
@@ -1699,7 +1856,8 @@ function schedMusic(){
   if(nextNoteT<AC.currentTime)nextNoteT=AC.currentTime+.1;
   while(nextNoteT<AC.currentTime+.6){
     const s=SONGS[songI],nn=s.n[noteI];
-    bell(mf(nn[0]),nextNoteT,.55,musicGain);
+    if(carolOn)choir(mf(nn[0]),nextNoteT,nn[1]*s.b);else bell(mf(nn[0]),nextNoteT,.55,musicGain);
+    pulses.push({at:tNow+(nextNoteT-AC.currentTime),g:nn[0]%4});
     nextNoteT+=nn[1]*s.b;noteI++;
     if(noteI>=s.n.length){noteI=0;songI=(songI+1)%SONGS.length;nextNoteT+=3;setTimeout(updatePlayer,3000)}
   }
