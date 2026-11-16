@@ -831,7 +831,7 @@ function buildScene(){
   {
     const gu=new Set(g.gift.under);
     g.snowC=cells.filter(o=>o.type==='snow'&&!gu.has(o)&&o.hideAt===undefined&&!o.smUnder);
-    g.ridgeC=cells.filter(o=>o.type==='ridge'&&o.hideAt===undefined);
+    g.ridgeC=cells.filter(o=>o.type==='ridge'&&o.hideAt===undefined&&!o.smUnder&&!gu.has(o));
     g.snowEnd=Math.max(0,...g.snowC.map(o=>o.end),...g.ridgeC.map(o=>o.end))+.1;
     g.snowBk=g.ridgeBk=null;
   }
@@ -924,15 +924,18 @@ function setup(){
   W=innerWidth;H=innerHeight;
   cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  // chữ số nhỏ để cảnh mịn và có chỗ cho chi tiết
-  // chữ số dày gấp ~2–3 lần bản cũ cho cảnh chi tiết hơn (?d=old để xem mật độ cũ)
-  // cỡ chữ tự tính để cảnh có khoảng 10.000 chữ số (điện thoại nhỏ giữ tối thiểu 4.5px cho còn đọc được)
-  fs=QS.get('d')==='old'?clamp(Math.round(Math.min(H/90,W/96)),7,12):clamp(Math.round(Math.sqrt(W*H/24900)*2)/2,4.5,12);
-  FIG=clamp(8.5/fs,1,1.6); // người, chó vẫn giữ cỡ cũ cho dễ nhìn
-  ctx.font=`${fs}px ${FONT}`;
-  cw=ctx.measureText('0').width;ch=fs*1.12;
-  cols=Math.ceil(W/cw);rows=Math.ceil(H/ch);
-  buildScene();buildSky();
+  // cảnh luôn có 7.000–10.000 chữ số: đoán cỡ chữ theo màn hình, dựng thử, đếm, chỉnh cỡ rồi dựng lại
+  fs=clamp(Math.round(Math.sqrt(W*H/24900)*4)/4,4,14);
+  for(let it=0;it<5;it++){
+    ctx.font=`${fs}px ${FONT}`;
+    cw=ctx.measureText('0').width;ch=fs*1.12;
+    cols=Math.ceil(W/cw);rows=Math.ceil(H/ch);
+    buildScene();
+    const n=cells.length;if(n>=7000&&n<=10000)break;
+    const nf=clamp(Math.round(fs*Math.sqrt(n/8500)*20)/20,3.2,14);if(nf===fs)break;fs=nf;
+  }
+  FIG=clamp(8.5/fs,1,1.7); // người, chó vẫn giữ cỡ cũ cho dễ nhìn
+  buildSky();
   fws=[];parts=[];bursts.length=0;smoke=[];fin=null;finNext=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
@@ -1385,10 +1388,12 @@ function drawFireworks(t,dt){
   // khói mờ còn đọng lại sau khi pháo tàn, trôi theo gió
   if(smoke.length){
     ctx.globalCompositeOperation='source-over';ctx.fillStyle='hsl(225,14%,58%)';
+    let cf=0;
     for(let i=smoke.length-1;i>=0;i--){
       const s=smoke[i];s.age+=dt;if(s.age>s.life){smoke.splice(i,1);continue}
       s.x+=(wind*.04+s.dx)*dt;s.y-=4*dt;
-      ctx.globalAlpha=.13*Math.sin(Math.PI*s.age/s.life)*s.a;ctx.font=`${s.fz}px ${FONT}`;ctx.fillText(s.ch,s.x,s.y);
+      if(s.fz!==cf){cf=s.fz;ctx.font=`${cf}px ${FONT}`}
+      ctx.globalAlpha=.13*Math.sin(Math.PI*s.age/s.life)*s.a;ctx.fillText(s.ch,s.x,s.y);
     }
     ctx.font=`${fs}px ${FONT}`;
   }
@@ -1438,7 +1443,7 @@ function drawFireworks(t,dt){
       const tl=p.tail||1;
       for(let q=1;q<=tl;q++){ctx.globalAlpha=a*(.45/q);ctx.fillText(q%2?'.':':',px-(p.vx*.035*q)-b.fz*.3,py-(p.vy*.035*q)+b.fz*.35)}
     }
-    if(!alive){bursts.splice(i,1);continue}
+    if(!alive&&!b.ps.length){bursts.splice(i,1);continue} // còn tia con vừa tách ra thì chưa xoá chùm
   }
   ctx.font=`${fs}px ${FONT}`;
   ctx.globalCompositeOperation='source-over';
@@ -1820,7 +1825,7 @@ function frame(now){
   }
   for(const o of cells){
     if(o.bk&&geo.snowBk)continue;
-    if(o.smUnder){const s=geo.snowman,cv=o.coveredBy;if(t>cv.delay+.12&&!(s.melt&&t>s.melt+1.6))continue}
+    if(o.smUnder){const s=geo.snowman,cv=o.coveredBy;if(t>cv.delay+.12&&!(s.melt&&t>s.melt+2.2))continue}
     if(o.hideAt!==undefined&&t>o.hideAt)continue;
     const p=(t-o.delay)/o.dur;
     if(p<0)continue;
