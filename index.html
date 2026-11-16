@@ -799,8 +799,9 @@ function buildScene(){
   }
   // bóng xanh đậm của cây, hộp quà, người tuyết đổ trên tuyết, lệch sang trái vì trăng ở bên phải
   const gt0=groundTop(g.cx),sm=g.snowman,gf=g.gift;
-  const shadows=[[g.cx-g.HW*.14,gt0+ch*1.4,g.HW*.85,ch*3.4],
-    [gf.mx-gf.w*.3,gf.y1+ch*.4,gf.w*.75,ch*1.5],[sm.x-cw*3,sm.bottom+ch*.4,(sm.x1-sm.x0)*.42,ch*1.5]];
+  // (bản 3D: bóng được vẽ động theo trăng và pháo hoa, nên không in sẵn vào tuyết nữa)
+  const shadows=FLAT?[[g.cx-g.HW*.14,gt0+ch*1.4,g.HW*.85,ch*3.4],
+    [gf.mx-gf.w*.3,gf.y1+ch*.4,gf.w*.75,ch*1.5],[sm.x-cw*3,sm.bottom+ch*.4,(sm.x1-sm.x0)*.42,ch*1.5]]:[];
   for(const o of cells){
     o.x=o.c*cw;o.y=(o.r+0.82)*ch;
     if(o.type==='snow'||o.type==='snowsp')for(const [sx,sy,rx,ry] of shadows){
@@ -935,7 +936,7 @@ function setup(){
     const nf=clamp(Math.round(fs*Math.sqrt(n/8500)*20)/20,3.2,14);if(nf===fs)break;fs=nf;
   }
   FIG=clamp(8.5/fs,1,1.7); // người, chó vẫn giữ cỡ cũ cho dễ nhìn
-  buildSky();
+  buildSky();buildVillage();buildDrifts();passF=[];fogB=[];nextPass=0;lastGlows=[];cam.z=1.07;
   fws=[];parts=[];bursts.length=0;smoke=[];fin=null;finNext=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
   paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
@@ -1187,7 +1188,7 @@ function drawPerson(p,t){
     p.lastF=f;stepSnd(p.x,z);const pr=geo.prints;pr.push({x:p.x+(f?cw*.35:-cw*.35)*sc,y:groundTop(p.x)+ch*.85+zy+ch*.3*z,t0:t,s:sc});
     if(pr.length>400)pr.splice(0,pr.length-400);
   }
-  ctx.globalAlpha=1;
+  figShadow(x,feet+zy,sc);ctx.globalAlpha=1;
   ctx.save();ctx.translate(x,feet+zy);ctx.scale(sc,sc);
   [[p.hat,p.hatC],[head,'#f2c79b'],[arms,p.coat],[legs,'#8a95b0']].forEach(([s,col],i)=>{ctx.fillStyle=col;ctx.fillText(s,-s.length*cw/2,-(3-i)*ch+bob)});
   ctx.restore();
@@ -1580,7 +1581,10 @@ function giftUpdate(t,dt){
     if(k>=1){
       G.drop=0;G.landT=t;
       for(const o of G.under)o.hideAt=o.hide0;
-      for(let i=0;i<16;i++)bits.push({x:G.mx+rnd(-1,1)*G.w*.6,y:G.y1,vx:rnd(-90,90),vy:rnd(-120,-30),ch:pick('*.0'),col:'hsl(205,40%,94%)',age:0,life:rnd(.5,1)});
+      // hộp nặng chạm đất: tuyết bắn tung sang hai bên rồi rơi lại, kèm một làn bụi tuyết
+      for(let i=0;i<(FLAT?16:58);i++){const s=Math.random()<.5?-1:1,f=Math.random();
+        bits.push({x:G.mx+s*rnd(.15,.55)*G.w,y:G.y1-ch*.3,vx:s*(40+f*230),vy:-(50+(1-f)*190)*rnd(.6,1),ch:pick('*.08o.'),col:`hsl(205,${rnd(25,40)|0}%,${rnd(84,97)|0}%)`,age:0,life:rnd(.9,1.6)})}
+      if(!FLAT)snowPuffs.push({x:G.mx,y:G.y1,w:G.w,t0:t});
       sparkleAt(G.mx,G.top,22,48);sfx('splat',G.mx);
     }
   }
@@ -1640,6 +1644,202 @@ function drawPaper(t){
   ctx.restore();
 }
 
+/* ---------- chiều sâu: bóng đổ, sương, làng xa, hồ băng, máy quay ---------- */
+const cam={z:1,fx:0,fy:0};
+let passF=[],nextPass=0,fogB=[],village=null,drifts=[],snowPuffs=[],lastGlows=[],starCs=1;
+// toạ độ chạm trên màn hình -> toạ độ trong cảnh (khi máy quay đang đẩy vào)
+const toWorld=(x,y)=>[cam.fx+(x-cam.fx)/cam.z,cam.fy+(y-cam.fy)/cam.z];
+function updateCam(t,dt){
+  const g=geo;cam.fx=g.cx;cam.fy=g.treeTop+g.TH*.6;
+  let z=1;
+  if(!reduce&&!FLAT){
+    z+=.07*(1-easeOut(clamp(t/10,0,1)));                       // mở đầu: lùi dần ra như cảnh phim
+    if(paper&&!paper.close)z+=.06;                               // đọc thư: đẩy sát vào cây
+    if(fin){const e=t-fin.t0;if(e>fin.dur-10&&e<fin.dur+4)z+=.05*Math.sin(Math.PI*clamp((e-fin.dur+10)/14,0,1))} // cuối màn pháo hoa
+  }
+  cam.z+=(z-cam.z)*Math.min(1,dt*(t<10?6:1.4));
+}
+// bóng hình nón đổ trên mặt tuyết, ngược phía nguồn sáng
+function coneShadow(bx,by,hgt,hw,lx,ly,a,rgb){
+  const g=geo,gh=g.bottom-g.groundY;
+  const tx=bx+clamp((bx-lx)/W,-.9,.9)*hgt*1.5,ty=Math.min(g.bottom-ch*.5,by+gh*(.35+.45*clamp((ly-H*.05)/(H*.6),0,1)));
+  const vx=tx-bx,vy=ty-by,L=Math.hypot(vx,vy)||1,px=-vy/L,py=vx/L*.45;
+  const pts=[],N=8;
+  for(let i=0;i<=N;i++){const k=i/N,w=k<.12?hw*(.25+.75*k/.12):hw*(1-k)/.88;pts.push([bx+vx*k,by+vy*k,w])}
+  const gr=ctx.createLinearGradient(bx,by,tx,ty);
+  gr.addColorStop(0,`rgba(${rgb},${a})`);gr.addColorStop(1,`rgba(${rgb},0)`);
+  ctx.fillStyle=gr;ctx.beginPath();
+  pts.forEach((p,i)=>i?ctx.lineTo(p[0]+px*p[2],p[1]+py*p[2]):ctx.moveTo(p[0]+px*p[2],p[1]+py*p[2]));
+  for(let i=N;i>=0;i--){const p=pts[i];ctx.lineTo(p[0]-px*p[2],p[1]-py*p[2])}
+  ctx.closePath();ctx.fill();
+}
+function drawShadows(t){
+  const g=geo,mk=clamp((t-T.moon)/3,0,1)*clamp((t-g.snowEnd)/2,0,1);if(mk<=0||FLAT)return;
+  const src=[];
+  if(g.moon)src.push([g.moon.x,g.moon.y,.45*mk*moonDim,'6,10,30']);
+  for(const b of bursts)if(b.age<1.2)src.push([b.x,b.y,.32*(1-b.age/1.2)*(.5+.5*b.z),'3,6,20']); // pháo nổ: bóng cây quét theo
+  ctx.save();ctx.beginPath();ctx.rect(0,g.groundY-ch*.5,W,g.bottom-g.groundY+ch);ctx.clip();
+  ctx.globalAlpha=1;
+  const gt0=groundTop(g.cx)+ch*.9,sm=g.snowman,gf=g.gift,tk=clamp((t-T.leaf-2)/2,0,1);
+  for(const [lx,ly,a,rgb] of src){
+    if(tk>0)coneShadow(g.cx,gt0,g.TH,g.HW*.55,lx,ly,a*tk,rgb);
+    if(sm&&g.walker&&t>g.walker.tb0+1&&!(sm.melt&&t>sm.melt+1.5))coneShadow(sm.x,sm.bottom,(sm.bottom-sm.top)*.9,(sm.x1-sm.x0)*.32,lx,ly,a*.8,rgb);
+    if(gf&&!gf.gone&&!gf.drop&&t>T.gift+1)coneShadow(gf.mx,gf.y1,gf.y1-gf.y0,gf.w*.4,lx,ly,a*.7,rgb);
+  }
+  ctx.restore();
+}
+// bóng người: một vệt bầu dục nghiêng xa trăng
+function figShadow(x,y,sc){
+  const g=geo;if(!g.moon||FLAT)return;
+  const d=clamp((x-g.moon.x)/W,-1,1);
+  ctx.save();ctx.globalAlpha=.32*moonDim;ctx.fillStyle='#060a1c';
+  ctx.beginPath();ctx.ellipse(x+d*cw*2.2*sc,y+ch*.12,cw*(1.2+Math.abs(d)*1.6)*sc,ch*.22*sc,d*.25,0,TAU);ctx.fill();ctx.restore();
+}
+// làng nhỏ ở chân trời: mái phủ tuyết, cửa sổ vàng ấm, khói bếp
+function buildVillage(){
+  const g=geo,sm=g.snowman,gf=g.gift;village=null;if(FLAT)return;
+  const lo=Math.min(sm?sm.x0:g.cx-g.HW,g.cx-g.HW)-cw*3,hi=Math.max(gf?gf.x1:g.cx+g.HW,g.cx+g.HW)+cw*3;
+  const hwid=clamp(W*.045,cw*7,cw*13),houses=[];
+  for(const [a,b] of[[cw*2,lo],[hi,W-cw*2]]){
+    let x=a+rnd(0,hwid),m=0;
+    while(x+hwid<b&&m<3){houses.push({x:x+hwid/2,w:hwid*rnd(.85,1.2)});x+=hwid*rnd(2.4,4);m++}
+  }
+  if(!houses.length)return;
+  const C=[],wins=[],chims=[];
+  for(const h of houses){
+    // ô chữ cao gần gấp đôi bề ngang: số hàng chỉ bằng ~1/4 số cột thì nhà mới ra dáng nhà
+    const n=Math.max(7,Math.round(h.w/cw)|1),nb=Math.max(2,Math.round(n*.24)),nr=Math.max(2,Math.ceil(n*.17));
+    const c0=Math.round(h.x/cw-n/2),base=groundTop(h.x)+ch*.4;
+    for(let i=0;i<nb;i++)for(let j=0;j<n;j++){
+      const win=i===nb-1-(nb>2?1:0)&&(j===Math.round(n*.25)||j===n-1-Math.round(n*.25));
+      const x=(c0+j)*cw,y=base-i*ch;
+      C.push({x,y,ch:win?'8':pick(DIG),col:win?'hsl(40,90%,62%)':`hsl(225,${18}%,${15+(j<n/2?3:0)}%)`});
+      if(win)wins.push({x:x+cw/2,y:y-fs*.35,ph:rnd(0,7),sp:rnd(.3,.9)});
+    }
+    for(let i=0;i<nr;i++){
+      const half=(n/2+1)*(1-i/nr),y=base-(nb+i)*ch;
+      for(let j=Math.ceil(-half);j<=Math.floor(half);j++){
+        const x=(c0+n/2+j-.5)*cw,edge=Math.abs(j)>=Math.floor(half)-0;
+        C.push({x,y,ch:pick('08o'),col:`hsl(212,${edge?20:28}%,${edge?78:58+i*3}%)`});
+      }
+    }
+    if(Math.random()<.75){const cx=(c0+Math.round(n*.72))*cw,y=base-(nb+Math.round(nr*.45))*ch;
+      C.push({x:cx,y,ch:'#',col:'hsl(10,25%,26%)'},{x:cx,y:y-ch,ch:'0',col:'hsl(212,25%,80%)'});chims.push({x:cx+cw/2,y:y-ch*1.6,nx:0})}
+  }
+  const minY=Math.min(...C.map(q=>q.y))-ch;
+  village={bk:bake(C,0,minY,W,g.groundY-minY+ch*2,()=>1,q=>q.col),wins,chims,puffs:[]};
+}
+function drawVillage(t,dt,ox,oy){
+  const V=village;if(!V)return;
+  const k=clamp((t-geo.snowEnd)/2.5,0,1);if(k<=0)return;
+  const B=V.bk;ctx.globalAlpha=k*.95;ctx.drawImage(B.img,B.ox+ox,B.oy+oy,B.w,B.h);
+  // khói bếp bay lên, cong theo gió
+  for(const c of V.chims)if(t>c.nx&&!reduce){c.nx=t+rnd(.5,1.1);V.puffs.push({x:c.x,y:c.y,age:0,life:rnd(3,4.5),ch:pick('.o°')})}
+  ctx.fillStyle='hsl(220,15%,70%)';
+  for(let i=V.puffs.length-1;i>=0;i--){
+    const p=V.puffs[i];p.age+=dt;if(p.age>p.life){V.puffs.splice(i,1);continue}
+    p.y-=ch*.9*dt;p.x+=(6+wind*.02)*dt+Math.sin(p.age*2)*3*dt;
+    ctx.globalAlpha=k*.35*(1-p.age/p.life);ctx.fillText(p.ch,p.x+ox,p.y+oy);
+  }
+  // cửa sổ ấm, thỉnh thoảng có nhà tắt rồi bật đèn
+  ctx.globalCompositeOperation='lighter';
+  for(const w of V.wins){
+    const on=Math.sin(t*w.sp*.15+w.ph)>-.85,f=.75+.25*Math.sin(t*w.sp*3+w.ph);if(!on)continue;
+    const R=ch*2.2;ctx.globalAlpha=k*.28*f;ctx.drawImage(glow.gold,w.x+ox-R/2,w.y+oy-R/2,R,R);
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+// sương mỏng trôi ngang chân trời, làm núi và làng xa mờ, lạnh đi
+function drawFog(t,dt,ox){
+  const g=geo,k=clamp((t-g.snowEnd)/3,0,1);if(k<=0||FLAT)return;
+  if(!fogB.length)for(let i=0;i<7;i++)fogB.push({x:rnd(-.2,1.1)*W,y:g.groundY-ch*rnd(.5,4),w:rnd(.35,.6)*W,h:ch*rnd(3,6),v:rnd(3,9)*(Math.random()<.5?-1:1),a:rnd(.05,.1)});
+  const y0=g.groundY-H*.09,gr=ctx.createLinearGradient(0,y0,0,g.groundY+ch);
+  gr.addColorStop(0,'rgba(110,130,185,0)');gr.addColorStop(.7,'rgba(110,130,185,.13)');gr.addColorStop(1,'rgba(150,165,210,.06)');
+  ctx.globalAlpha=k;ctx.fillStyle=gr;ctx.fillRect(0,y0,W,g.groundY+ch-y0);
+  for(const f of fogB){
+    if(!reduce)f.x+=(f.v+wind*.02)*dt;
+    if(f.x>W+f.w*.6)f.x=-f.w*.6;else if(f.x<-f.w*.6)f.x=W+f.w*.6;
+    ctx.globalAlpha=k*f.a*(1+.3*Math.sin(t*.2+f.w));ctx.drawImage(glow.white,f.x+ox-f.w/2,f.y-f.h/2,f.w,f.h);
+  }
+}
+// tuyết vun quanh chân cây, hộp quà, người tuyết: che mép dưới để vật như lún vào tuyết chứ không đặt lơ lửng
+function makeDrift(x0,x1,base,key){
+  const n=Math.max(4,Math.ceil((x1-x0)/cw)+4),cells=[];
+  for(let i=0;i<n;i++){
+    const u=i/(n-1),x=x0-cw*2+i*cw,e=Math.min(u,1-u)*2; // e: 0 ở hai đầu, 1 ở giữa
+    if(e<.2&&Math.random()<.5)continue;                   // hai đầu thưa, tan dần vào mặt tuyết
+    cells.push({x,y:base+ch*.12,ch:pick('08690'),l:rnd(74,86)});
+    if(e>.25&&Math.random()<.3+e*.6)cells.push({x:x+cw*rnd(-.3,.3),y:base-ch*.42,ch:pick('o0.8'),l:rnd(84,95)});
+  }
+  return{key,cells};
+}
+function buildDrifts(){
+  const g=geo,sm=g.snowman,gf=g.gift;drifts=[];snowPuffs=[];if(FLAT)return;
+  const tw=g.TH*.05;
+  drifts.push(makeDrift(g.cx-tw,g.cx+tw,groundTop(g.cx)+ch*1.5,'tree'));
+  if(gf)drifts.push(makeDrift(gf.bx0,gf.bx0+gf.w,gf.y1+ch*.1,'gift'));
+  if(sm){const r=sm.x-sm.x0-cw*4;drifts.push(makeDrift(sm.x-r*.8,sm.x+r*.8,sm.bottom+ch*.15,'sm'))}
+}
+function driftA(key,t){
+  const g=geo;
+  if(key==='tree')return clamp((t-T.trunk-1)/1,0,1);
+  if(key==='gift'){const G=g.gift;if(!G||G.gone||G.drop)return 0;let a=G.landT?clamp((t-G.landT)/.2,0,1):clamp((t-T.gift-1)/1,0,1);if(G.open)a*=clamp(1-(t-G.open-1.6)/1.2,0,1);return a}
+  const s=g.snowman,wk=g.walker;if(!wk||t<wk.tb0+.6)return 0;
+  if(s.melt)return clamp(1-(t-s.melt-1.2)/1,0,1);
+  return clamp((t-wk.tb0-.6)/1,0,1);
+}
+function drawDrifts(t,dt){
+  for(const d of drifts){
+    const a=driftA(d.key,t);if(a<=0)continue;
+    for(const q of d.cells){ctx.globalAlpha=a;ctx.fillStyle=`hsl(208,26%,${q.l|0}%)`;ctx.fillText(q.ch,q.x,q.y)}
+  }
+  // bụi tuyết tung lên khi hộp quà chạm đất
+  for(let i=snowPuffs.length-1;i>=0;i--){
+    const p=snowPuffs[i],e=(t-p.t0)/1.1;if(e>=1){snowPuffs.splice(i,1);continue}
+    const rx=p.w*(.7+e*1.3),ry=ch*(1.5+e*2.6);
+    ctx.globalAlpha=.42*(1-e)*(1-e);ctx.drawImage(glow.white,p.x-rx,p.y-ry*1.1-e*ch,rx*2,ry*2);
+  }
+}
+// bóng sát chân: chỗ vật chạm tuyết luôn tối nhất, cho cảm giác có sức nặng
+function drawContact(t){
+  if(FLAT)return;
+  const g=geo,ao=(x,y,rx,a)=>{if(a<=0)return;ctx.save();ctx.translate(x,y);ctx.scale(1,.3);
+    const gr=ctx.createRadialGradient(0,0,0,0,0,rx);gr.addColorStop(0,`rgba(4,7,22,${a})`);gr.addColorStop(.6,`rgba(4,7,22,${a*.5})`);gr.addColorStop(1,'rgba(4,7,22,0)');
+    ctx.globalAlpha=1;ctx.fillStyle=gr;ctx.fillRect(-rx,-rx,rx*2,rx*2);ctx.restore()};
+  ao(g.cx,groundTop(g.cx)+ch*1.5,g.HW*.55,.5*clamp((t-T.trunk-1),0,1));
+  const G=g.gift;if(G)ao(G.bx0+G.w/2,G.y1+ch*.1,G.w*.8,.55*driftA('gift',t));
+  const s=g.snowman;if(s){const r=s.x-s.x0-cw*4;ao(s.x,s.bottom+ch*.15,r*1.5,.55*driftA('sm',t))}
+}
+// bông tuyết bay vụt sát ống kính: lớn dần, nhòe, lướt ra mép màn hình
+function drawPassFlakes(t,dt){
+  if(reduce||FLAT||t<T.snow+3)return;
+  if(t>nextPass){nextPass=t+rnd(3.5,8);const a=rnd(0,TAU);passF.push({x:W*rnd(.25,.75),y:H*rnd(.2,.6),vx:Math.cos(a)*rnd(.15,.35)*W,vy:Math.abs(Math.sin(a))*rnd(.1,.3)*H+H*.1,age:0,life:rnd(1.1,1.7),ch:pick('*08')})}
+  for(let i=passF.length-1;i>=0;i--){
+    const p=passF[i];p.age+=dt;const e=p.age/p.life;if(e>=1){passF.splice(i,1);continue}
+    const g=e*e;p.x+=p.vx*dt*(.3+g*2.5);p.y+=p.vy*dt*(.3+g*2.5);
+    const S=fs*(1.5+g*16),a=Math.sin(Math.PI*e)*(.5-.3*g);
+    ctx.globalAlpha=a*.6;ctx.drawImage(glow.white,p.x-S*.6,p.y-S*.6,S*1.2,S*1.2);
+    ctx.globalAlpha=a*.35;ctx.fillStyle='#eef4ff';ctx.font=`${S|0}px ${FONT}`;ctx.fillText(p.ch,p.x-S*.3,p.y+S*.35);
+  }
+  ctx.font=`${fs}px ${FONT}`;
+}
+// vết xe trượt tuyết chạy xa dần về chân trời + hạt tuyết gần to hơn: khắc thẳng vào ảnh nền tuyết
+function carveSnow(B){
+  const g=geo,c=B.img.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.translate(-B.ox,-B.oy);
+  const gh=g.bottom-g.groundY;
+  const x0=W*.92,y0=g.bottom-ch*.2,x1=g.cx+g.HW*1.6+W*.05,y1=groundTop(x1)+ch*1.2;
+  for(const off of[-1,1])for(let i=0;i<=60;i++){
+    const k=i/60,p=k*k*.3+k*.7,s=1-p*.75,x=x0+(x1-x0)*p+off*cw*1.6*s+Math.sin(p*5)*cw*2*(1-p),y=y0+(y1-y0)*p;
+    if(y<groundTop(x)+ch*.6)continue;
+    c.globalAlpha=.55*s;c.fillStyle='hsl(222,28%,52%)';c.font=`${Math.max(3,fs*s)|0}px ${FONT}`;c.fillText(i%3?'-':'=',x,y);
+  }
+  for(let i=0;i<Math.round(W/25);i++){
+    const x=rnd(0,W),d=Math.pow(Math.random(),.6),y=groundTop(x)+ch+d*(gh-ch*1.5),s=.6+d*1.1;
+    c.globalAlpha=.25+.45*d;c.fillStyle='hsl(205,40%,95%)';c.font=`${Math.max(3,fs*s)|0}px ${FONT}`;c.fillText(pick('*08.'),x,y);
+  }
+  c.globalAlpha=1;c.setTransform(1,0,0,1,0,0);
+}
+
 /* ---------- vòng lặp ---------- */
 let prev=performance.now(),fpsS=60,fpsT=0;
 function frame(now){
@@ -1648,6 +1848,9 @@ function frame(now){
   const t=(now-start)/1000;tNow=t;
   ctx.globalCompositeOperation='source-over';
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  // máy quay: đẩy vào / lùi ra quanh cây (thư và màn pháo cuối được vẽ ngoài khung này)
+  updateCam(t,dt);starCs=Math.cos(rot3?rot3.rot:0); // sao quay cùng một nhịp với cây
+  ctx.save();ctx.translate(cam.fx,cam.fy);ctx.scale(cam.z,cam.z);ctx.translate(-cam.fx,-cam.fy);
   // trời ngả xanh than và Ngân Hà hiện dần cùng các vì sao
   const sk=clamp((t-T.stars)/4,0,1);
   // nhạc đang phát: đèn trên cây nhận nhịp từng nốt
@@ -1807,11 +2010,15 @@ function frame(now){
   if(!geo.snowBk&&t>geo.snowEnd){
     geo.snowBk=bake(geo.snowC,0,0,W,H,()=>1,o=>o.col);geo.ridgeBk=bake(geo.ridgeC,0,0,W,H,()=>1,o=>o.col);
     for(const o of geo.snowC)o.bk=1;for(const o of geo.ridgeC)o.bk=1;
+    if(!FLAT)carveSnow(geo.snowBk);
   }
   if(geo.snowBk){
     ctx.globalAlpha=1;
     let B=geo.ridgeBk;ctx.drawImage(B.img,B.ox-pX*.45,B.oy-pY*.2,B.w,B.h);
-    B=geo.snowBk;ctx.drawImage(B.img,B.ox,B.oy,B.w,B.h);
+    drawFog(t,dt,-pX*.38);
+    drawVillage(t,dt,-pX*.3,-pY*.12);
+    ctx.globalAlpha=1;B=geo.snowBk;ctx.drawImage(B.img,B.ox,B.oy,B.w,B.h);
+    drawContact(t);drawShadows(t);ctx.globalAlpha=1;
   }
   // đèn ở phía sau cây: chỉ thấy ánh sáng mờ lọt qua kẽ lá
   if(rot3&&rot3.back.length){
@@ -1898,7 +2105,11 @@ function frame(now){
     if(rot3&&o.type==='tree'&&p>=1){
       const ph=o.th-rot3.rot,b=Math.floor((((ph/TAU)%1)+1)%1*o.nb);
       // chỉ tính lại khi ô lá chuyển sang "múi" mới của vòng xoay
-      if(o.dg!==b){o.dg=b;o.ch=DIG[hsh(b,o.r+77)*10|0];o.tv=o.pal[texV(b,o.r,o.nb)];o.gar=!o.e&&onGarland(o.y,ph)}
+      if(o.dg!==b){o.dg=b;o.ch=DIG[hsh(b,o.r+77)*10|0];o.tv=o.pal[texV(b,o.r,o.nb)];o.gar=!o.e&&onGarland(o.y,ph);
+        // tuyết đọng trên cành trôi theo vòng xoay; tới mép cành thì rơi xuống
+        if(o.cap&&o.capT!==t){o.cap=false;const nb=gridMap.get(o.r*cols+o.c+1);
+          if(nb&&nb.ledge&&!nb.cap&&nb.type==='tree'){nb.cap=true;nb.capCh=o.capCh;nb.capT=t}
+          else if(bits.length<300)bits.push({x:o.x+cw,y:o.y-ch*.3,vx:rnd(15,45),vy:rnd(-25,0),ch:o.capCh,col:'hsl(205,35%,93%)',age:0,life:rnd(1.2,2)})}}
       c=o.ch;col=o.tv;
       if(t>o.lightAt){
         deco=rot3.map.size?rot3.map.get(o.r*cols+o.c)||null:null;
@@ -1934,6 +2145,8 @@ function frame(now){
       else if(o.moonEdge&&moonDim>.65)col=o.mcol;                                  // viền ánh trăng
     }
     if(gcol)col=gcol;
+    // ngôi sao xoay quanh trục đứng: hẹp lại khi quay nghiêng, mặt sau tối hơn
+    if(o.type==='star'&&p>=1&&!FLAT){const m=Math.sign(starCs||1)*Math.max(.1,Math.abs(starCs));x=geo.sx+(x+cw/2-geo.sx)*m-cw/2;if(starCs<0)col=`hsl(38,85%,${Math.max(30,o.l-24)|0}%)`}
     if(o.type==='snowman'&&p>=1){
       const r=smLook(o,t,x,y,c,col,a);x=r[0];y=r[1];c=r[2];col=r[3];a=r[4];
     }
@@ -1942,6 +2155,7 @@ function frame(now){
     ctx.globalAlpha=a;
     ctx.fillText(c,x,y);
   }
+  drawDrifts(t,dt);
   // lá rơi, tuyết rơi khỏi cành, pháo giấy từ hộp quà
   for(let i=bits.length-1;i>=0;i--){
     const b=bits[i];b.age+=dt;
@@ -1989,7 +2203,7 @@ function frame(now){
     const mk=clamp((t-T.moon)/3,0,1)*clamp((t-T.snow)/2,0,1);
     if(mk>0)ell(g.moonX,W*.13,'rgba(255,242,205,1)',.09*mk*moonDim);
     // đèn cây hắt một vùng sáng ấm xuống tuyết quanh gốc
-    if(t>T.lights)ell(g.cx,Math.min(W*.2,g.HW*1.1),'rgba(255,185,100,1)',.075*Math.min(1,(t-T.lights)/2));
+    if(t>T.lights)ell(g.cx,Math.min(W*.2,g.HW*1.1),'rgba(255,185,100,1)',.075*Math.min(1,(t-T.lights)/2)*(musicSync?1+1.2*Math.max(0,1-(t-Math.max(...beat))/.4):1));
     for(const b of bursts)if(b.age<.8)ell(b.x,W*.17,`hsl(${b.hue},${Math.min(100,b.sat+30)|0}%,70%)`,.2*(1-b.age/.8));
     // đèn sáng in bóng mờ xuống tuyết
     for(const q of glows){
@@ -2018,7 +2232,7 @@ function frame(now){
     const fig=[[wk.hat||'^',wk.hatC||'#c8404b'],['o','#f2c79b'],[arms,wk.coat||'#7fb4e0'],[ph==='walk'?(f?'/ \\':' | '):'/ \\','#8a95b0']];
     // mỗi bước chân để lại một dấu trên tuyết
     if(ph==='walk'&&f!==wk.lastF){wk.lastF=f;stepSnd(wx,0);geo.prints.push({x:wx+(f?cw*.35:-cw*.35),y:groundTop(wx)+ch*.85,t0:t})}
-    ctx.globalAlpha=1;
+    figShadow(wx,feet,FIG);ctx.globalAlpha=1;
     ctx.save();ctx.translate(wx,feet);ctx.scale(FIG,FIG);
     fig.forEach(([s,col],i)=>{ctx.fillStyle=col;ctx.fillText(s,-s.length*cw/2,-(3-i)*ch+bob)});
     ctx.restore();
@@ -2031,6 +2245,7 @@ function frame(now){
   // quầng sáng
   ctx.globalCompositeOperation='lighter';
   for(const g of glows){ctx.globalAlpha=g[4];ctx.drawImage(glow[g[0]],g[1]-g[3]/2,g[2]-g[3]/2,g[3],g[3])}
+  lastGlows=glows;
   // hộp quà: lấp lánh mời bấm, sau khi mở thì toả sáng từ trong hộp
   const gf=geo.gift;
   if(gf&&t>T.gift+1.2&&!gf.gone&&!gf.drop){
@@ -2043,6 +2258,8 @@ function frame(now){
     const k=Math.min(1,sp),pulse=.82+.18*Math.sin(t*3),sx=geo.sx,sy=geo.sy,SR=geo.SR;
     if(!geo.starPopped&&t>T.star+.6){geo.starPopped=1;sparkleAt(sx,sy,44,48);sfx('star')}
     let R=SR*6.5*pulse;ctx.globalAlpha=.6*k;ctx.drawImage(glow.gold,sx-R/2,sy-R/2,R,R);
+    // sao quay chính diện: loé một chớp sáng như mặt kim loại bắt ánh đèn
+    if(!FLAT){const fl=Math.pow(Math.abs(starCs),40);if(fl>.05){R=SR*4.5;ctx.globalAlpha=.55*k*fl;ctx.drawImage(glow.white,sx-R/2,sy-R/2,R,R)}}
     R=SR*2.4;ctx.globalAlpha=.55*k*pulse;ctx.drawImage(glow.white,sx-R/2,sy-R/2,R,R);
     ctx.lineWidth=1.2;
     const n=14,rot=t*.22;
@@ -2103,6 +2320,7 @@ function frame(now){
         ctx.globalAlpha=b.a*ka;ctx.drawImage(glow.white,b.x+pX*1.6-b.z/2,b.y+pY-b.z/2,b.z,b.z);
       }
     }
+    drawPassFlakes(t,dt);
     // càng xem lâu cây càng phủ tuyết
     // bão tuyết làm tuyết đọng dày nhanh hơn trên cây, hộp quà và người tuyết
     for(let n=sK>0?4:1;n>0;n--)
@@ -2188,6 +2406,7 @@ function frame(now){
   }
   ctx.globalAlpha=1;
   drawHints(t);drawTouchFx(t,dt);drawCharge(t);
+  ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
   if(paper)drawPaper(t);
   ctx.globalAlpha=1;
 
@@ -2631,7 +2850,7 @@ document.addEventListener('visibilitychange',()=>{if(!AC)return;if(document.hidd
 updatePlayer();
 
 cv.addEventListener('pointerdown',e=>{
-  const x=e.clientX,y=e.clientY;
+  const [x,y]=toWorld(e.clientX,e.clientY);
   lastPtr={x,t:performance.now()};
   if(!pEls.list.hidden){toggleList(false);return} // chạm ra ngoài thì đóng danh sách bài
   // iPhone cần xin quyền cảm biến chuyển động từ một lần chạm
@@ -2654,7 +2873,7 @@ cv.addEventListener('pointerdown',e=>{
   try{cv.setPointerCapture(e.pointerId)}catch(err){}
 });
 cv.addEventListener('pointermove',e=>{
-  const x=e.clientX,y=e.clientY,now=performance.now();
+  const [x,y]=toWorld(e.clientX,e.clientY),now=performance.now();
   if(e.pointerType==='mouse'){par.src=1;par.tx=(x/W-.5)*2;par.ty=(y/H-.5)*2} // rê chuột: cảnh lệch lớp theo góc nhìn
   // tốc độ rê ngang tạo gió
   if(lastPtr){const dtm=Math.max(8,now-lastPtr.t);const vx=(x-lastPtr.x)/dtm*1000;wind=clamp(wind*.7+vx*.3,-1600,1600)}
