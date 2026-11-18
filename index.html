@@ -174,6 +174,8 @@ const easeOut=p=>1-Math.pow(1-p,3);
 const FONT='"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,"DejaVu Sans Mono",monospace';
 // trình tự xuất hiện (giây): trời đen → sao, trăng, mây → tuyết dâng → thân cây → lá → đèn → ngôi sao → hoa hồng → lời chúc, pháo hoa → ông già Noel
 const T={stars:.8,moon:1.2,clouds:.6,snow:1.5,trunk:4,leaf:5,lights:8.8,star:10.4,rose:11.6,gift:14.4,greet:15.2,fw:16,santa:12.6,walkIn:21};
+// chữ ký nhỏ, mờ ở góc dưới bên trái mỗi lá thư (sửa tên ở đây)
+const SIGN='— voduong';
 // lời nhắn trên tờ giấy (sửa nội dung ở đây)
 const MSG={
   gift:{ic:'pine',title:'Món quà nhỏ cho bạn',body:'Chúc bạn một mùa Giáng Sinh thật ấm áp, luôn có những người thương yêu ở bên, và một năm mới gặp thật nhiều may mắn, bình an và hạnh phúc.'},
@@ -1574,8 +1576,7 @@ function drawMotif(M,x,yb,sz,flip,grid){
     ctx.fillStyle=M.c[k==='o'?1:0];const cc=flip?row.length-1-c:c;
     ctx.fillText(grid[(r*7+c*3)%grid.length],x+cc*w,y0+(r+.85)*h)}});
 }
-let ltrFx=[],letterLit=[],ltDraw=[];
-// thêm một ngọn đèn mới lên cây, đặt sao cho lúc đốm sáng bay tới thì đèn đang ở mặt trước
+let ltrFx=[],letterLit=[],ltDraw=[];// thêm một ngọn đèn mới lên cây, đặt sao cho lúc đốm sáng bay tới thì đèn đang ở mặt trước
 function newLetterLight(tint){
   letterLit.push({g:tint.g,lc:tint.lc});
   if(letterLit.length>40)letterLit.shift();
@@ -1841,7 +1842,11 @@ function drawLetter(P,t,ua,tint,fade=1){
   if(done){if(!P.doneT)P.doneT=t;
     ctx.globalAlpha=fade*clamp((t-P.doneT)/.6,0,1)*(1-ce);ctx.textAlign='center';
     ctx.font=`${Math.max(10,Math.round(fs*.9))}px ${FONT}`;ctx.fillStyle='#9a7650';
-    ctx.fillText('— chạm để đóng —',W/2,py+PH-pad*.6)}
+    ctx.fillText('— chạm để đóng —',W/2,py+PH-pad*.6);
+    // chữ ký: hiện dần như vừa ký xong, nằm ngay cạnh hình góc dưới bên phải
+    ctx.globalAlpha=fade*.5*clamp((t-P.doneT)/1,0,1);ctx.textAlign='right';
+    ctx.font=`600 ${Math.round(bs*.8)}px "Dancing Script",Georgia,serif`;ctx.fillStyle='#5a3a1e';
+    ctx.fillText(SIGN,ox+(c2-2)*cw-M.p[0].length*ch*mz/fs*.92*.8-cw,py+PH-pad*.6-bs*.95)}
   ctx.restore();
   // hai lõi cuộn giấy (khi đóng: lõi dưới cuộn lên gặp lõi trên)
   ctx.save();ctx.globalAlpha=fade;ctx.font=`${fs}px ${FONT}`;
