@@ -176,18 +176,18 @@ const FONT='"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,"DejaVu Sans Mono",m
 const T={stars:.8,moon:1.2,clouds:.6,snow:1.5,trunk:4,leaf:5,lights:8.8,star:10.4,rose:11.6,gift:14.4,greet:15.2,fw:16,santa:12.6,walkIn:21};
 // lời nhắn trên tờ giấy (sửa nội dung ở đây)
 const MSG={
-  gift:{title:'Món quà nhỏ cho bạn',body:'Chúc bạn một mùa Giáng Sinh thật ấm áp, luôn có những người thương yêu ở bên, và một năm mới gặp thật nhiều may mắn, bình an và hạnh phúc.'},
+  gift:{ic:'pine',title:'Món quà nhỏ cho bạn',body:'Chúc bạn một mùa Giáng Sinh thật ấm áp, luôn có những người thương yêu ở bên, và một năm mới gặp thật nhiều may mắn, bình an và hạnh phúc.'},
   // mỗi hộp quà ông già Noel thả xuống mang một lời chúc khác
   wishes:[
-    {title:'Quà từ ông già Noel',body:'Chúc bạn luôn khoẻ mạnh, nụ cười lúc nào cũng rạng rỡ như ánh đèn trên cây thông đêm nay.'},
-    {title:'Một hộp bình an',body:'Gửi bạn một hộp bình an: mong những ngày sắp tới thật nhẹ nhàng, mọi lo lắng đều tan như tuyết dưới nắng.'},
-    {title:'Một hộp may mắn',body:'Chúc bạn năm mới gặp toàn điều may: học hành, công việc thuận lợi, gặp đúng người và đúng lúc.'},
-    {title:'Một hộp yêu thương',body:'Mong bạn luôn được yêu thương và có những người thân ở bên mỗi khi trời trở lạnh.'},
-    {title:'Một hộp ước mơ',body:'Chúc mọi ước mơ của bạn dù lớn hay nhỏ đều từng bước thành sự thật. Cố lên nhé!'},
-    {title:'Một hộp ấm áp',body:'Gửi bạn chút ấm áp của mùa Giáng Sinh: một tách cacao nóng, một bài hát hay và một giấc ngủ thật ngon.'},
-    {title:'Một hộp niềm vui',body:'Chúc bạn mỗi ngày đều có một lý do nhỏ để mỉm cười. Merry Christmas!'},
+    {ic:'star',title:'Quà từ ông già Noel',body:'Chúc bạn luôn khoẻ mạnh, nụ cười lúc nào cũng rạng rỡ như ánh đèn trên cây thông đêm nay.'},
+    {ic:'snow',title:'Một hộp bình an',body:'Gửi bạn một hộp bình an: mong những ngày sắp tới thật nhẹ nhàng, mọi lo lắng đều tan như tuyết dưới nắng.'},
+    {ic:'bell',title:'Một hộp may mắn',body:'Chúc bạn năm mới gặp toàn điều may: học hành, công việc thuận lợi, gặp đúng người và đúng lúc.'},
+    {ic:'heart',title:'Một hộp yêu thương',body:'Mong bạn luôn được yêu thương và có những người thân ở bên mỗi khi trời trở lạnh.'},
+    {ic:'star',title:'Một hộp ước mơ',body:'Chúc mọi ước mơ của bạn dù lớn hay nhỏ đều từng bước thành sự thật. Cố lên nhé!'},
+    {ic:'candle',title:'Một hộp ấm áp',body:'Gửi bạn chút ấm áp của mùa Giáng Sinh: một tách cacao nóng, một bài hát hay và một giấc ngủ thật ngon.'},
+    {ic:'snow',title:'Một hộp niềm vui',body:'Chúc bạn mỗi ngày đều có một lý do nhỏ để mỉm cười. Merry Christmas!'},
   ],
-  santa:{title:'Ho ho ho! Merry Christmas!',body:'Ông già Noel ghé qua gửi lời chúc: Giáng Sinh an lành, ấm áp bên gia đình. Mong mọi điều ước của bạn đều thành sự thật!'}
+  santa:{ic:'bell',title:'Ho ho ho! Merry Christmas!',body:'Ông già Noel ghé qua gửi lời chúc: Giáng Sinh an lành, ấm áp bên gia đình. Mong mọi điều ước của bạn đều thành sự thật!'}
 };
 
 let W,H,dpr,fs,cw,ch,cols,rows,cells=[],stars=[],sparkles=[],flakes=[],fws=[],parts=[],roses=[];
@@ -349,6 +349,7 @@ function build3D(g,nL,nO,ornR){
   }
   rot3={hwR,lights,orns,ornR,map:new Map(),back:[],rot:0,kick:0,
     yS:g.treeTop+g.TH*.18,pitch:g.TH*.17,yEnd:g.treeBot-g.TH*.05,drape:g.TH*.028};
+  for(const q of letterLit)addLetterLight(q.g,q.lc,T.lights+1,null); // dựng lại cảnh (xoay máy): giữ đèn của các lá thư đã đọc
 }
 const GDECO={k:'G'};
 const ORNC={red:[352,90,55],gold:[45,100,58],blue:[212,95,62],pink:[325,90,66]};
@@ -358,6 +359,7 @@ function deco3D(t,dt){
   if(!reduce&&t>T.leaf)R.rot+=(OMEGA+R.kick)*dt;
   const m=R.map;m.clear();R.back.length=0;
   for(const L of R.lights){
+    if(L.born>t)continue; // đèn từ lá thư: chỉ sáng khi đốm sáng bay tới nơi
     const hw=R.hwR[L.r],a=L.p+R.rot,c=Math.cos(a),x=geo.cx+hw*Math.sin(a);
     if(c>.08)m.set(L.r*cols+Math.floor(x/cw),{k:'L',L,c});
     else R.back.push([L,x,(L.r+.82)*ch-fs*.35,-c]);
@@ -938,7 +940,7 @@ function setup(){
   FIG=clamp(8.5/fs,1,1.7); // người, chó vẫn giữ cỡ cũ cho dễ nhìn
   buildSky();buildVillage();buildDrifts();passF=[];fogB=[];nextPass=0;lastGlows=[];cam.z=1.07;
   fws=[];parts=[];bursts.length=0;smoke=[];fin=null;finNext=0;fwCount=0;nextFw=T.fw;santa=null;nextSanta=T.santa;
-  paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];
+  paper=null;meteor=null;nextMeteor=T.stars+7;wish=null;shake=-9;bits=[];ltrFx=[];
   stagesFired=new Set();lastTick=-1;bellNext=0;
   ripples=[];trail=[];drag=null;hintQ=null;
   storm={t0:-99,dur:0,dir:1};nextStorm=0;stormFlakes=[];sK=0;dog=null;nextCarol=0;carolNotes=[];carolOn=false;pulses.length=0;
@@ -1525,7 +1527,116 @@ function hitTree(x,y){return tNow>T.leaf+2&&inTree(x,y)}
 function sparkleAt(x,y,n,hue){
   for(let i=0;i<n;i++){const a=rnd(0,TAU),v=rnd(40,150);parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,age:0,life:rnd(.8,1.6),tw:rnd(0,7),sz:rnd(2,4),hue,sat:90})}
 }
-function openPaper(m,delay=0){paper={m,t0:tNow+delay,close:0,grid:null};setTimeout(()=>sfx('paper'),delay*1000)}
+// thư: phong bì dấu sáp → chạm vỡ dấu → giấy cuộn mở → chữ tự viết → chạm đóng: cuộn lại, bay thành đèn trên cây
+function openPaper(m,delay=0,pi=null){paper={m,t0:tNow+delay,close:0,grid:null,pi,brk:0,full:0,wEnd:Infinity,penN:0,penT:0}}
+function paperTap(){
+  const P=paper;if(!P||P.close)return;
+  if(tNow-P.t0<.35)return;
+  if(!P.brk){breakSeal(P,tNow);return}
+  const ua=tNow-P.brk-.55;if(ua<.5)return;
+  if(!P.full&&ua-.6<P.wEnd){P.full=1;return} // đang viết: chạm một lần hiện hết chữ
+  closePaper();
+}
+function closePaper(){
+  const P=paper;if(!P||P.close)return;
+  P.close=tNow;
+  if(!P.brk||tNow-P.brk<1){P.quick=1;return}            // chưa mở hẳn: chỉ mờ đi
+  P.L=newLetterLight(P.tint||paperTint(P.pi));sfx('paper');
+}
+function breakSeal(P,t){
+  P.brk=t;sfx('seal');
+  const sx=P.sealX??W/2,sy=P.sealY??H/2;
+  for(let i=0;i<26;i++){const a=rnd(0,TAU),v=rnd(60,230);
+    ltrFx.push({k:'chip',x:sx,y:sy,vx:Math.cos(a)*v,vy:Math.sin(a)*v-80,ch:pick(DIG),col:`hsl(${pick([352,356,0])},${rnd(70,85)|0}%,${rnd(32,52)|0}%)`,age:0,life:rnd(.7,1.2)})}
+}
+// màu viền thư theo màu nơ của hộp quà; đèn mới trên cây cũng cùng màu
+function paperTint(pi){
+  if(pi==null)return{bd:'hsl(42,75%,40%)',bd2:'hsl(44,60%,62%)',g:'gold',lc:'#ffd36b'};       // thư ông già Noel: viền vàng
+  const r=GPAL[pi].r;
+  if(r[2]===null)return{bd:'hsl(42,90%,38%)',bd2:'hsl(44,80%,55%)',g:'gold',lc:'#ffd36b'};     // nơ vàng
+  if(r[1]<5)return{bd:'hsl(210,12%,45%)',bd2:'hsl(210,14%,62%)',g:'white',lc:'#ffffff'};       // nơ bạc
+  if(r[2]>80)return{bd:'hsl(32,50%,40%)',bd2:'hsl(36,45%,58%)',g:'gold',lc:'#ffe6a8'};          // nơ kem
+  return{bd:`hsl(${r[0]},78%,38%)`,bd2:`hsl(${r[0]},65%,58%)`,g:'red',lc:'#ff7a88'};            // nơ đỏ
+}
+// hình nhỏ ở góc thư, vẽ bằng chữ số: # màu chính, o màu phụ
+const MOTIF={
+  star:{c:['hsl(44,95%,46%)'],p:['   #   ','  ###  ','#######',' ##### ',' ## ## ','##   ##']},
+  snow:{c:['hsl(205,65%,52%)'],p:['#  #  #',' # # # ','  ###  ','#######','  ###  ',' # # # ','#  #  #']},
+  bell:{c:['hsl(43,90%,44%)','hsl(354,75%,45%)'],p:['  oo  ','  ##  ',' #### ',' #### ','######','  oo  ']},
+  heart:{c:['hsl(354,75%,48%)'],p:[' ## ## ','#######','#######',' ##### ','  ###  ','   #   ']},
+  pine:{c:['hsl(140,45%,30%)','hsl(25,50%,32%)'],p:['   #   ','  ###  ',' ##### ','  ###  ',' ##### ','#######','   o   ']},
+  candle:{c:['hsl(354,70%,45%)','hsl(40,100%,50%)'],p:['  o  ',' ooo ','  o  ',' ### ',' ### ',' ### ','#####']},
+};
+function drawMotif(M,x,yb,sz,flip,grid){
+  const h=ch*sz/fs*.92,w=h*.8,N=M.p.length,y0=yb-N*h; // ô gần vuông để hình không bị bóp méo
+  ctx.font=`${sz}px ${FONT}`;ctx.textAlign='left';
+  M.p.forEach((row,r)=>{for(let c=0;c<row.length;c++){const k=row[c];if(k===' ')continue;
+    ctx.fillStyle=M.c[k==='o'?1:0];const cc=flip?row.length-1-c:c;
+    ctx.fillText(grid[(r*7+c*3)%grid.length],x+cc*w,y0+(r+.85)*h)}});
+}
+let ltrFx=[],letterLit=[],ltDraw=[];
+// thêm một ngọn đèn mới lên cây, đặt sao cho lúc đốm sáng bay tới thì đèn đang ở mặt trước
+function newLetterLight(tint){
+  letterLit.push({g:tint.g,lc:tint.lc});
+  if(letterLit.length>40)letterLit.shift();
+  return addLetterLight(tint.g,tint.lc,Infinity,1.5);
+}
+function addLetterLight(g,lc,born,lead){
+  const R=rot3;if(!R)return null;
+  const tree=cells.filter(o=>o.type==='tree'&&o.y>geo.treeTop+geo.TH*.14&&o.y<geo.treeBot-geo.TH*.06&&R.hwR[o.r]>cw*3);
+  if(!tree.length)return null;
+  const o=pick(tree),p=lead==null?rnd(0,TAU):-(R.rot+OMEGA*lead)+rnd(-.65,.65);
+  const L={r:o.r,p,g,col:lc,tw:rnd(0,7),grp:Math.random()*4|0,ch:'*',lt:1,born};
+  R.lights.push(L);return L;
+}
+// toạ độ một ngọn đèn trên màn hình (cây nằm trong khung máy quay)
+function lightScreen(L){
+  const R=rot3,hw=R.hwR[L.r],a=L.p+R.rot,x=geo.cx+hw*Math.sin(a)+cw/2,y=(L.r+.82)*ch-fs*.35;
+  return[cam.fx+(x-cam.fx)*cam.z,cam.fy+(y-cam.fy)*cam.z];
+}
+function spawnLetterFly(P,box){
+  const L=P.L;let tx=geo.cx,ty=geo.treeTop+geo.TH*.5;
+  if(L){[tx,ty]=lightScreen(L)}else{tx=cam.fx+(tx-cam.fx)*cam.z;ty=cam.fy+(ty-cam.fy)*cam.z}
+  const n=FLAT?18:Math.round(46*(.5+.5*Q.fw));
+  for(let i=0;i<n;i++){
+    const sx=box.px+rnd(0,box.PW),sy=box.py+rnd(-ch*.6,ch*.6);
+    ltrFx.push({k:'fly',sx,sy,bx:(sx+tx)/2+rnd(-1,1)*W*.22,by:Math.min(sy,ty)-rnd(40,H*.22),L,tx,ty,
+      d:rnd(0,.3)+Math.abs(sx-W/2)/W*.25,dur:rnd(.95,1.35),ch:pick(DIG),age:0,g:L?L.g:'gold',col:L?L.col:'#ffd36b'});
+  }
+  setTimeout(()=>sfx('fly'),120);
+}
+function drawLetterFx(t,dt){
+  if(!ltrFx.length)return;
+  ctx.save();ctx.font=`${fs}px ${FONT}`;ctx.textAlign='center';
+  for(let i=ltrFx.length-1;i>=0;i--){
+    const f=ltrFx[i];f.age+=dt;
+    if(f.k==='chip'){
+      f.vy+=520*dt;f.x+=f.vx*dt;f.y+=f.vy*dt;
+      if(f.age>f.life){ltrFx.splice(i,1);continue}
+      ctx.globalAlpha=1-f.age/f.life;ctx.fillStyle=f.col;ctx.font=`700 ${Math.round(fs*1.5)}px ${FONT}`;ctx.fillText(f.ch,f.x,f.y);continue;
+    }
+    // đốm sáng chữ số bay theo đường cong vào đúng ngọn đèn (đèn vẫn đang xoay theo cây)
+    const k=(f.age-f.d)/f.dur;if(k<0)continue;
+    if(f.L&&rot3)[f.tx,f.ty]=lightScreen(f.L);
+    if(k>=1){
+      if(f.L&&f.L.born===Infinity){f.L.born=t;sfx('lit');
+        ltrFx.push({k:'flash',x:f.tx,y:f.ty,g:f.g,L:f.L,age:0})}
+      ltrFx.splice(i,1);continue;
+    }
+    const e=k*k*(3-2*k),u=1-e,x=u*u*f.sx+2*u*e*f.bx+e*e*f.tx,y=u*u*f.sy+2*u*e*f.by+e*e*f.ty;
+    const a=Math.min(1,k*5)*(1-Math.pow(k,6)*.5);
+    ctx.globalCompositeOperation='lighter';ctx.globalAlpha=a*.6;
+    const gs=ch*(3.4-k*1.4);ctx.drawImage(glow[f.g],x-gs/2,y-gs/2,gs,gs);
+    ctx.globalCompositeOperation='source-over';ctx.globalAlpha=a;ctx.fillStyle=f.col;
+    ctx.font=`700 ${Math.round(fs*(1.7-k*.6))}px ${FONT}`;ctx.fillText(f.ch,x,y+fs*.45);
+  }
+  for(let i=ltrFx.length-1;i>=0;i--){const f=ltrFx[i];if(f.k!=='flash')continue;
+    if(f.age>1){ltrFx.splice(i,1);continue}
+    if(f.L&&rot3)[f.x,f.y]=lightScreen(f.L);
+    const e=f.age,s=ch*(4+e*12);ctx.globalCompositeOperation='lighter';ctx.globalAlpha=(1-e)*.9;
+    ctx.drawImage(glow[f.g],f.x-s/2,f.y-s/2,s,s)}
+  ctx.restore();
+}
 function openGift(auto){
   const g=geo.gift;
   if(!g.open){
@@ -1534,9 +1645,9 @@ function openGift(auto){
       const a=rnd(-Math.PI*.95,-Math.PI*.05),v=rnd(120,320);
       bits.push({x:g.mx,y:g.top,vx:Math.cos(a)*v,vy:Math.sin(a)*v,ch:pick(DIG),col:`hsl(${pick([0,45,140,205,45,0])},85%,65%)`,age:0,life:rnd(1.6,2.6),conf:1});
     }
-    openPaper(g.msg,.8);
+    openPaper(g.msg,.8,g.pi||0);
     if(auto)paper.auto=tNow+.8+30; // người khác mở giùm: thư đầu tiên để đọc 30 giây rồi mới tự tắt
-  }else openPaper(g.msg);
+  }else openPaper(g.msg,0,g.pi||0);
 }
 // màu hộp quà: [màu giấy gói (hue, độ đậm)], [màu nơ (hue, độ đậm, độ sáng hoặc null = giữ)]
 const GPAL=[
@@ -1599,41 +1710,141 @@ function shakeTree(){
     if(Math.random()<.5)bits.push({x:o.x,y:o.y-ch*.3,vx:rnd(-25,25),vy:rnd(-30,0),ch:o.capCh,col:'hsl(205,35%,93%)',age:0,life:rnd(1.5,2.5)});
   }
 }
-// tờ giấy: nền dệt bằng chữ số, cuộn mở từ trên xuống, chữ viết tay
+// thư: phong bì dệt bằng chữ số có dấu sáp; mở ra là tờ giấy cuộn, chữ viết tay hiện dần
 function drawPaper(t){
   const P=paper,age=t-P.t0;if(age<0)return;
-  if(P.auto&&t>P.auto&&!P.close)P.close=t;
-  let k=easeOut(clamp(age/.7,0,1));
-  if(P.close){const e=(t-P.close)/.35;if(e>=1){paper=null;return}k*=1-e}
+  if(P.auto&&!P.brk&&age>2.6)breakSeal(P,t);                 // người khác mở giùm: tự vỡ dấu
+  if(P.auto&&t>P.auto&&!P.close&&P.brk)closePaper();
+  const tint=P.tint||(P.tint=paperTint(P.pi));
+  if(!P.grid){P.grid=[];for(let i=0;i<5000;i++)P.grid.push(pick(DIG))}
+  let dim=clamp(age/.5,0,1),fade=1;
+  if(P.close){const e=(t-P.close)/(P.quick?.35:.5);if(P.quick){if(e>=1){paper=null;return}fade=1-e}dim*=1-clamp(e,0,1)}
+  ctx.save();ctx.globalAlpha=.6*dim;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);ctx.restore();
+  const ue=P.brk?t-P.brk:-1;
+  if(ue<1)drawEnvelope(P,t,age,ue,tint,fade);
+  if(ue>.55&&!P.quick)drawLetter(P,t,ue-.55,tint);
+  else if(P.quick&&ue>.55)drawLetter(P,t,ue-.55,tint,fade);
+}
+function drawEnvelope(P,t,age,ue,tint,fade){
+  const EW=Math.min(W-48,380),EH=EW*.62,ex=(W-EW)/2;
+  const ina=easeOut(clamp(age/.5,0,1));
+  let ey=(H-EH)/2-(1-ina)*40,al=ina*fade;
+  if(ue>.5){const e=clamp((ue-.5)/.5,0,1);ey+=e*e*H*.45;al*=1-e}
+  if(al<=0)return;
+  // nắp phong bì: đang đóng (fo=1) → lật ngược lên trên (fo=-1) khi dấu vỡ
+  const fo=ue<0?1:1-2*easeOut(clamp(ue/.4,0,1)),ay=ey+EH*.56*fo,mx=ex+EW/2;
+  ctx.save();ctx.globalAlpha=al;
+  ctx.shadowColor='rgba(0,0,0,.6)';ctx.shadowBlur=24;ctx.fillStyle='#e8d9b5';ctx.fillRect(ex,ey,EW,EH);ctx.shadowBlur=0;
+  ctx.font=`${fs}px ${FONT}`;
+  const c2=Math.floor(EW/cw),r2=Math.floor(EH/ch),ox=ex+(EW-c2*cw)/2,oy=ey+(EH-r2*ch)/2;
+  const inFlap=(x,y)=>fo>0?y<ay&&Math.abs(x-mx)<EW/2*(1-(y-ey)/(ay-ey)):false;
+  let n=0;
+  for(let r=0;r<r2;r++)for(let c=0;c<c2;c++){
+    const x=ox+(c+.5)*cw,y=oy+(r+.5)*ch,edge=r===0||c===0||r===r2-1||c===c2-1;
+    // hai nếp gấp chéo từ góc dưới lên giữa
+    const fx=Math.abs(x-mx)/(EW/2),dl=Math.abs((ey+EH-y)/(EH*.5)-(1-fx));
+    let col='#dccaa0';
+    if(edge)col=tint.bd;
+    else if(inFlap(x,y))col=Math.abs(Math.abs(x-mx)-EW/2*(1-(y-ey)/(ay-ey)))<cw?tint.bd2:'#cfb98c';
+    else if(dl<.07&&y>ey+EH*.5)col='#c8b083';
+    ctx.fillStyle=col;ctx.fillText(P.grid[n++%5000],ox+c*cw,oy+(r+.82)*ch);
+  }
+  // nắp đã lật lên: vẽ phía trên mép phong bì
+  if(fo<0){
+    const top=ey+EH*.56*fo;
+    for(let y=ey-ch*.5;y>top;y-=ch){const k=(ey-y)/(ey-top),hw=EW/2*(1-k);
+      for(let x=mx-hw;x<mx+hw;x+=cw){ctx.fillStyle=Math.abs(Math.abs(x+cw/2-mx)-hw)<cw?tint.bd2:'#c9b183';ctx.fillText(P.grid[(n++)%5000],x,y+fs*.35)}}
+  }
+  // dấu sáp đỏ in bông tuyết, phập phồng mời chạm
+  const R=EW*.085;P.sealX=mx;P.sealY=ay;
+  if(!P.brk)drawSeal(mx,ay,R*(1+.04*Math.sin(t*3)),0,t);
+  else if(ue<.7){const e=ue/.7;ctx.globalAlpha=al*(1-e);
+    for(const s of[-1,1]){ctx.save();ctx.beginPath();ctx.rect(s<0?mx-R*2:mx,ay-R*2,R*2,R*4);ctx.clip();
+      ctx.translate(s*e*R*1.4,e*e*H*.25);drawSeal(mx,ay,R,s*e*.9,t);ctx.restore()}}
+  if(!P.brk&&!P.auto){ctx.globalAlpha=al*(.45+.25*Math.sin(t*2.4));ctx.textAlign='center';ctx.font=`${Math.max(10,Math.round(fs*.95))}px ${FONT}`;
+    ctx.fillStyle='#e9dcb8';ctx.fillText('— chạm dấu sáp để mở —',W/2,ey+EH+ch*2)}
+  ctx.restore();
+}
+function drawSeal(x,y,R,rot,t){
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot);
+  ctx.globalCompositeOperation='lighter';const a0=ctx.globalAlpha;ctx.globalAlpha=a0*.25;ctx.drawImage(glow.red,-R*2.2,-R*2.2,R*4.4,R*4.4);
+  ctx.globalCompositeOperation='source-over';ctx.globalAlpha=a0;
+  ctx.beginPath();for(let i=0;i<=28;i++){const a=i/28*TAU,rr=R*(1+.07*Math.sin(i*5.3)+.04*Math.sin(i*2.1));i?ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):ctx.moveTo(rr,0)}
+  const gr=ctx.createRadialGradient(-R*.3,-R*.35,R*.1,0,0,R*1.1);gr.addColorStop(0,'#e0475a');gr.addColorStop(.6,'#a8172b');gr.addColorStop(1,'#6a0b18');
+  ctx.fillStyle=gr;ctx.fill();
+  ctx.strokeStyle='rgba(60,0,10,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,R*.74,0,TAU);ctx.stroke();
+  // bông tuyết 6 cánh bằng chữ số
+  ctx.font=`${Math.max(7,R*.34)|0}px ${FONT}`;ctx.textAlign='center';ctx.fillStyle='#f6b3ba';
+  for(let k=0;k<6;k++){const a=k/6*TAU-Math.PI/2;for(const [d,c] of[[.22,'1'],[.44,'0'],[.64,'8']])ctx.fillText(c,Math.cos(a)*R*d,Math.sin(a)*R*d+R*.12)}
+  ctx.fillText('0',0,R*.12);
+  ctx.restore();
+}
+function drawLetter(P,t,ua,tint,fade=1){
+  let k=easeOut(clamp(ua/.7,0,1));
+  const ce=P.close&&!P.quick?clamp((t-P.close)/.5,0,1):0;
   const PW=Math.min(W-32,540),pad=Math.max(22,PW*.08);
   const ts=clamp(Math.round(PW/14),22,38),bs=clamp(Math.round(PW/22),17,25);
-  ctx.save();
-  ctx.globalAlpha=.6*k;ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
-  ctx.font=`600 ${bs}px "Dancing Script",Georgia,serif`;
-  const lines=wrap(P.m.body,PW-pad*2);
-  const PH=pad*2+ts*1.5+lines.length*bs*1.4+fs*2.6;
-  const px=(W-PW)/2,py=(H-PH)/2,vis=PH*Math.min(1,k*1.15);
-  if(!P.grid){P.grid=[];for(let i=0;i<5000;i++)P.grid.push(pick(DIG))}
-  ctx.globalAlpha=k;
+  const bodyF=`600 ${bs}px "Dancing Script",Georgia,serif`,titleF=`700 ${ts}px "Dancing Script",Georgia,serif`;
+  ctx.save();ctx.font=bodyF;
+  if(P.lkey!==PW){P.lkey=PW;P.lines=wrap(P.m.body,PW-pad*2);
+    // lịch viết: mỗi chữ một khoảnh khắc, dừng lâu hơn sau dấu phẩy, dấu chấm
+    let tt=0;const mk=(s,sp)=>{const a=Array.from(s),tm=[];for(const c of a){tm.push(tt);tt+=sp*(c===','||c===':'?4:/[.!?]/.test(c)?7:c===' '?.7:1)}return{a,tm}};
+    P.segs=[mk(P.m.title,1/20)];tt+=.4;for(const l of P.lines){P.segs.push(mk(l,1/24));tt+=.08}P.wEnd=tt}
+  const lines=P.lines,mz=Math.max(10,Math.round(fs*1.1)),mh=7*ch*mz/fs*.92;
+  const PH=pad*2+ts*1.5+lines.length*bs*1.4+fs*2.6+mh*.6;
+  const px=(W-PW)/2,py=(H-PH)/2;
+  let vis=PH*Math.min(1,k*1.15);
+  if(ce>0)vis=Math.max(0,PH*(1-ce*ce));
+  P.box={px,py,PW};
+  if(!P.snd){P.snd=1;sfx('paper')}
+  ctx.globalAlpha=fade;
   ctx.beginPath();ctx.rect(px-12,py-ch,PW+24,vis+ch);ctx.clip();
   ctx.fillStyle='#efe3c4';ctx.fillRect(px,py,PW,PH);
   ctx.font=`${fs}px ${FONT}`;
   const c2=Math.floor(PW/cw),r2=Math.floor(PH/ch),ox=px+(PW-c2*cw)/2,oy=py+(PH-r2*ch)/2;
   let n=0;
   for(let r=0;r<r2;r++)for(let c=0;c<c2;c++){
-    const edge=r===0||c===0||r===r2-1||c===c2-1;
-    ctx.fillStyle=edge?'#b07a45':'#e2d1a8';ctx.fillText(P.grid[n++%5000],ox+c*cw,oy+(r+.82)*ch);
+    // viền thư hai lớp theo màu nơ hộp quà: ngoài đậm, trong nhạt
+    const d=Math.min(r,c,r2-1-r,c2-1-c);
+    ctx.fillStyle=d===0?tint.bd:d===2?tint.bd2:'#e2d1a8';ctx.fillText(P.grid[n++%5000],ox+c*cw,oy+(r+.82)*ch);
   }
-  ctx.globalAlpha=clamp((age-.45)/.4,0,1)*k;ctx.textAlign='center';
-  ctx.font=`700 ${ts}px "Dancing Script",Georgia,serif`;ctx.fillStyle='#9b1c2e';
-  ctx.fillText(P.m.title,W/2,py+pad+ts);
-  ctx.font=`600 ${bs}px "Dancing Script",Georgia,serif`;ctx.fillStyle='#4a2c16';
-  lines.forEach((l,i)=>ctx.fillText(l,W/2,py+pad+ts*1.5+(i+1)*bs*1.4));
-  ctx.font=`${Math.max(10,Math.round(fs*.9))}px ${FONT}`;ctx.fillStyle='#9a7650';
-  ctx.fillText('— chạm để đóng —',W/2,py+PH-pad*.6);
+  ctx.font=`700 ${fs}px ${FONT}`;ctx.fillStyle=tint.bd;n=0;
+  for(let c=0;c<c2;c++){ctx.fillText(P.grid[n++],ox+c*cw,oy+.82*ch);ctx.fillText(P.grid[n++],ox+c*cw,oy+(r2-.18)*ch)}
+  for(let r=1;r<r2-1;r++){ctx.fillText(P.grid[n++],ox,oy+(r+.82)*ch);ctx.fillText(P.grid[n++],ox+(c2-1)*cw,oy+(r+.82)*ch)}
+  // chữ tự viết: chữ mới hiện mờ rồi đậm dần, đầu bút sáng chạy theo
+  const we=P.full?1e9:ua-.6;
+  const M=MOTIF[P.m.ic]||MOTIF.star;
+  ctx.globalAlpha=fade*clamp((ua-.5)/.6,0,1);
+  drawMotif(M,ox+cw*2,oy+(r2-2)*ch,mz,false,P.grid);
+  drawMotif(M,ox+(c2-2)*cw-M.p[0].length*ch*mz/fs*.92*.8,oy+(r2-2)*ch,mz,true,P.grid);
+  let pen=null,shown=0;
+  const row=(seg,font,col,y)=>{
+    ctx.font=font;ctx.fillStyle=col;ctx.textAlign='left';
+    const full=seg.a.join(''),x0=W/2-ctx.measureText(full).width/2;
+    let j=0;while(j<seg.tm.length&&seg.tm[j]<=we)j++;
+    shown+=j;if(!j)return;
+    if(j===seg.tm.length&&we-seg.tm[j-1]>.15){ctx.globalAlpha=fade;ctx.fillText(full,x0,y);return}
+    const head=seg.a.slice(0,j-1).join('');ctx.globalAlpha=fade;ctx.fillText(head,x0,y);
+    const hx=x0+ctx.measureText(head).width,fa=clamp((we-seg.tm[j-1])/.15,0,1);
+    ctx.globalAlpha=fade*fa;ctx.fillText(seg.a[j-1],hx,y);
+    if(j<seg.tm.length||fa<1)pen=[hx+ctx.measureText(seg.a[j-1]).width,y-bs*.25];
+  };
+  row(P.segs[0],titleF,'#9b1c2e',py+pad+ts);
+  lines.forEach((l,i)=>row(P.segs[i+1],bodyF,'#4a2c16',py+pad+ts*1.5+(i+1)*bs*1.4));
+  if(pen&&!P.full&&ua>.6){
+    ctx.globalCompositeOperation='lighter';ctx.globalAlpha=.55*fade;const s=bs*1.3;ctx.drawImage(glow.gold,pen[0]-s/2,pen[1]-s/2,s,s);
+    ctx.globalCompositeOperation='source-over';
+    if(shown>P.penN&&t-P.penT>.07){P.penT=t;sfx('pen')}
+  }
+  P.penN=shown;
+  const done=we>=P.wEnd;
+  if(done){if(!P.doneT)P.doneT=t;
+    ctx.globalAlpha=fade*clamp((t-P.doneT)/.6,0,1)*(1-ce);ctx.textAlign='center';
+    ctx.font=`${Math.max(10,Math.round(fs*.9))}px ${FONT}`;ctx.fillStyle='#9a7650';
+    ctx.fillText('— chạm để đóng —',W/2,py+PH-pad*.6)}
   ctx.restore();
-  // hai lõi cuộn giấy
-  ctx.save();ctx.globalAlpha=k;ctx.font=`${fs}px ${FONT}`;
+  // hai lõi cuộn giấy (khi đóng: lõi dưới cuộn lên gặp lõi trên)
+  ctx.save();ctx.globalAlpha=fade;ctx.font=`${fs}px ${FONT}`;
   for(const yy of[py,py+vis]){
     const gr=ctx.createLinearGradient(0,yy-ch*.7,0,yy+ch*.7);
     gr.addColorStop(0,'#7a4c24');gr.addColorStop(.5,'#d9b27a');gr.addColorStop(1,'#6a4020');
@@ -1642,6 +1853,8 @@ function drawPaper(t){
     for(let x=px-6,i=0;x<px+PW+4;x+=cw,i++)ctx.fillText(DIG[i%10],x,yy+fs*.35);
   }
   ctx.restore();
+  // cuộn xong: tờ thư tan thành đốm sáng bay vào cây
+  if(ce>=1){spawnLetterFly(P,P.box);paper=null}
 }
 
 /* ---------- tự tối ưu độ mượt theo từng máy ---------- */
@@ -2170,7 +2383,10 @@ function frame(now){
           col={gold:'#ffd36b',white:'#ffffff',blue:'#7fb8ff',pink:'#ff8fd0',green:'#8dffb0'}[g];
           if(lightMode===2){on=true;col=`hsl(${(t*140+o.x*.5+o.y)%360|0},95%,65%)`;g='white'}
           const dep=.45+.55*d.c;
-          if(musicSync){const pk=Math.max(0,1-(t-beat[L.grp])/.35);on=pk>0;if(on){a*=(.55+.45*pk)*dep;glows.push([g,x+cw/2,y-fs*.35,ch*(1.6+pk*1.8)*dep,(.18+.4*pk)*dep])}else a*=.25}
+          // đèn của lá thư đã đọc: luôn sáng ấm, lúc mới gắn lên thì bừng sáng
+          if(L.lt){const bn=Math.max(0,1-(t-L.born)/1.2),k=.8+.2*Math.sin(t*2+L.tw);col=L.col;a*=dep;
+            glows.push([L.g,x+cw/2,y-fs*.35,ch*(3.4+bn*5)*dep,(.55*k+.45*bn)*dep]);ltDraw.push([x+cw/2,y,col,dep,k])}
+          else if(musicSync){const pk=Math.max(0,1-(t-beat[L.grp])/.35);on=pk>0;if(on){a*=(.55+.45*pk)*dep;glows.push([g,x+cw/2,y-fs*.35,ch*(1.6+pk*1.8)*dep,(.18+.4*pk)*dep])}else a*=.25}
           else{a*=on?dep:.25;if(on)glows.push([g,x+cw/2,y-fs*.35,ch*1.8*dep,.35*dep])}
         }
       }
@@ -2193,6 +2409,10 @@ function frame(now){
     ctx.globalAlpha=a;
     ctx.fillText(c,x,y);
   }
+  // đèn của các lá thư đã đọc: to và đậm hơn đèn thường để nhận ra
+  if(ltDraw.length){ctx.save();ctx.textAlign='center';ctx.font=`700 ${Math.round(fs*1.5)}px ${FONT}`;
+    for(const [x,y,col,dep,k] of ltDraw){ctx.globalAlpha=dep*k;ctx.fillStyle=col;ctx.fillText('*',x,y+fs*.25)}
+    ctx.restore();ctx.font=`${fs}px ${FONT}`;curCol=null;ltDraw.length=0}
   drawDrifts(t,dt);
   // lá rơi, tuyết rơi khỏi cành, pháo giấy từ hộp quà
   for(let i=bits.length-1;i>=0;i--){
@@ -2448,7 +2668,8 @@ function frame(now){
   drawHints(t);drawTouchFx(t,dt);drawCharge(t);
   ctx.restore();ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';
   if(paper)drawPaper(t);
-  ctx.globalAlpha=1;
+  drawLetterFx(t,dt);
+  ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.textAlign='left';
 
   soundFrame(t);
   {const w=performance.now()-now;qs.work=qs.work?qs.work*.95+w*.05:w}
@@ -2761,6 +2982,10 @@ function sfx(name,x,v=1){
     case 'wish':[84,88,91,96].forEach((m,i)=>bell(mf(m),n+i*.09,.18));break;                     // gửi điều ước
     case 'pop':tone(650,n,.14,.25,'sine',o,180);noise(n,.06,{f0:2500,vol:.08,dest:o});break;     // mở hộp quà
     case 'paper':noise(n,.45,{f0:2600,q:.7,vol:.04,dest:o});bell(mf(88),n+.25,.14);break;       // tờ giấy cuộn mở
+    case 'seal':noise(n,.07,{type:'highpass',f0:2200,vol:.09,dest:o});noise(n+.035,.05,{f0:900,q:2,vol:.06,dest:o});tone(190,n,.09,.07,'triangle',o,110);break; // dấu sáp vỡ
+    case 'pen':noise(n,.045,{f0:rnd(3800,6200),q:3,vol:.016,dest:o});break;                    // ngòi bút sột soạt
+    case 'fly':[91,95,98,103].forEach((m,i)=>bell(mf(m),n+i*.08,.05,o));break;                 // thư tan thành đốm sáng
+    case 'lit':bell(mf(96),n,.13,o);bell(mf(103),n+.09,.08,o);break;                           // đèn mới sáng trên cây
     case 'chime':{                                                                                 // chạm cây: vài nốt tiếp theo của bài đang phát
       const s=SONGS[songI];
       for(let i=0;i<3;i++){const nn=s.n[(treeMel+i)%s.n.length];bell(mf(nn[0]+12),n+i*.15,.13,o)}
@@ -2900,7 +3125,7 @@ cv.addEventListener('pointerdown',e=>{
     motionAsked=true;DeviceMotionEvent.requestPermission().catch(()=>{});
     if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')DeviceOrientationEvent.requestPermission().catch(()=>{});
   }
-  if(paper){if(tNow-paper.t0>.4&&!paper.close)paper.close=tNow;return}
+  if(paper){paperTap();return}
   // chạm trúng vật bấm được: vòng sáng vàng và điện thoại rung nhẹ
   const hit=k=>{ripple(x,y,true);tried(k);try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}};
   if(hitSanta(x,y)){hit('santa');sparkleAt(x,y,26,48);openPaper(MSG.santa,.15);return}
@@ -2955,7 +3180,7 @@ const endDrag=e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerup',endDrag);cv.addEventListener('pointercancel',endDrag);
 addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&paper&&!paper.close)paper.close=tNow;
+  if(e.key==='Escape'&&paper)closePaper();
   if(e.key==='r'||e.key==='R')setup();
 });
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(setup,200)});
